@@ -2,9 +2,15 @@ import { randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 
 // scrypt parameters. N=2^15 ≈ ~50ms on modern hardware. Increase if you can
 // tolerate slower login; do not decrease.
+//
+// MAXMEM: scrypt's memory cost is ~128*N*r bytes. At N=2^15 / r=8 that's
+// ~33 MiB, just over Node's 32 MiB default which makes scrypt throw
+// "memory limit exceeded". 64 MiB gives us headroom now and if we ever
+// bump N to 2^16.
 const N = 1 << 15;
 const KEY_LEN = 64;
 const SALT_LEN = 16;
+const MAXMEM = 64 * 1024 * 1024;
 
 /**
  * Promise wrapper for scrypt with options. We don't use `util.promisify`
@@ -17,7 +23,7 @@ function scryptWithOptions(
   keylen: number,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    scrypt(password, salt, keylen, { N }, (err, derivedKey) => {
+    scrypt(password, salt, keylen, { N, maxmem: MAXMEM }, (err, derivedKey) => {
       if (err) reject(err);
       else resolve(derivedKey);
     });
