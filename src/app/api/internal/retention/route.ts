@@ -44,7 +44,7 @@ export async function POST(request: Request) {
   const now = new Date();
   const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-  const [metrics, alerts, jobs, sessions, invites] = await prisma.$transaction([
+  const [metrics, alerts, jobs, sessions, invites, audit] = await prisma.$transaction([
     prisma.metric.deleteMany({ where: { createdAt: { lt: cutoff } } }),
     prisma.alert.deleteMany({
       where: { resolved: true, createdAt: { lt: cutoff } },
@@ -63,6 +63,9 @@ export async function POST(request: Request) {
         OR: [{ usedAt: { not: null } }, { expiresAt: { lt: now } }],
       },
     }),
+    // Audit log: rotate at the same cadence as everything else. If you need
+    // a longer retention for compliance, raise `days` on this cron only.
+    prisma.auditLog.deleteMany({ where: { createdAt: { lt: cutoff } } }),
   ]);
 
   return NextResponse.json({
@@ -74,6 +77,7 @@ export async function POST(request: Request) {
       jobs: jobs.count,
       sessions: sessions.count,
       invites: invites.count,
+      audit: audit.count,
     },
   });
 }

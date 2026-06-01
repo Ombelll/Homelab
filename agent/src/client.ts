@@ -39,6 +39,7 @@ export const api = {
       dockerId: string;
       name: string;
       image: string;
+      imageDigest?: string;
       status: string;
       ports: Array<{ host?: string; container: string; protocol?: string }>;
       composeProject?: string;

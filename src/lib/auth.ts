@@ -4,13 +4,19 @@ import { prisma } from "./prisma";
 /**
  * Verify that an incoming agent request carries a valid API key.
  *
- * The key may match either:
- *   1. The AGENT_API_KEY env var (simple shared secret, recommended for MVP), or
- *   2. A hashed value stored in the AgentKey table (per-agent keys, rotation).
+ * Two paths:
+ *   1. The AGENT_API_KEY env var — global shared secret (no host binding).
+ *   2. A hashed value stored in the AgentKey table. Each row may optionally
+ *      be bound to a specific hostname; if so, the request's hostname (read
+ *      out of the request body) must match for the key to be accepted.
  *
- * Returns true on success. Uses timing-safe comparison for the env-var path.
+ * Uses timing-safe comparison on the env-var path. AgentKey lookup is via
+ * SHA-256 hash so the plaintext key never lives in the DB.
  */
-export async function verifyAgentKey(request: Request): Promise<boolean> {
+export async function verifyAgentKey(
+  request: Request,
+  options?: { hostname?: string },
+): Promise<boolean> {
   const provided = request.headers.get("x-agent-key");
   if (!provided) return false;
 
@@ -30,6 +36,16 @@ export async function verifyAgentKey(request: Request): Promise<boolean> {
   const hash = createHash("sha256").update(provided).digest("hex");
   const record = await prisma.agentKey.findUnique({ where: { keyHash: hash } });
   if (!record || record.revokedAt) return false;
+
+  // If this key is hostname-scoped, the request must match. Compare
+  // case-insensitively so an agent reporting "ALPHA.lan" still works when
+  // the key was registered as "alpha.lan".
+  if (record.hostname) {
+    if (!options?.hostname) return false;
+    if (record.hostname.toLowerCase() !== options.hostname.toLowerCase()) {
+      return false;
+    }
+  }
 
   await prisma.agentKey.update({
     where: { id: record.id },

@@ -3,11 +3,16 @@ import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { requireAdmin, requireUser } from "@/lib/authz";
+import { recordAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
 const createSchema = z.object({
   label: z.string().min(1).max(64),
+  // Optional hostname binding. When set, the key only authenticates
+  // requests whose body specifies this exact hostname (case-insensitive
+  // compare). Use this for per-host keys.
+  hostname: z.string().max(255).optional().nullable(),
 });
 
 export async function GET() {
@@ -18,6 +23,7 @@ export async function GET() {
     select: {
       id: true,
       label: true,
+      hostname: true,
       createdAt: true,
       lastUsedAt: true,
       revokedAt: true,
@@ -50,8 +56,19 @@ export async function POST(request: Request) {
   const keyHash = createHash("sha256").update(plaintext).digest("hex");
 
   const record = await prisma.agentKey.create({
-    data: { label: parsed.data.label, keyHash },
-    select: { id: true, label: true, createdAt: true },
+    data: {
+      label: parsed.data.label,
+      keyHash,
+      hostname: parsed.data.hostname?.trim() || null,
+    },
+    select: { id: true, label: true, hostname: true, createdAt: true },
+  });
+
+  void recordAudit({
+    user: guard.user,
+    action: "agent-key.create",
+    target: `agent-key:${record.id}`,
+    metadata: { label: record.label, hostname: record.hostname },
   });
 
   // IMPORTANT: plaintext is returned exactly once, here. We never store it.

@@ -5,6 +5,8 @@ import { InvitesPanel } from "@/components/invites-panel";
 import { NotificationsPanel } from "@/components/notifications-panel";
 import { UsersPanel } from "@/components/users-panel";
 import { MaintenancePanel } from "@/components/maintenance-panel";
+import { BackupPanel } from "@/components/backup-panel";
+import { AuditLogPanel } from "@/components/audit-log-panel";
 import { getCurrentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -78,6 +80,10 @@ function AdminSettings() {
         <AgentKeysPanel />
 
         <InvitesPanel />
+
+        <BackupPanel />
+
+        <AuditLogPanel />
 
         <Card title="Hardening checklist">
           <ul className="ml-4 list-disc space-y-1 text-sm text-muted-foreground">

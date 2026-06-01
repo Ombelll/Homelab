@@ -19,8 +19,6 @@ const querySchema = z.object({
  * reclaimed on the next poll, so a crashed agent doesn't leave jobs stuck.
  */
 export async function GET(request: Request) {
-  if (!(await verifyAgentKey(request))) return unauthorized();
-
   const url = new URL(request.url);
   const parsed = querySchema.safeParse({
     hostname: url.searchParams.get("hostname"),
@@ -33,6 +31,8 @@ export async function GET(request: Request) {
     );
   }
   const { hostname, limit = 5 } = parsed.data;
+
+  if (!(await verifyAgentKey(request, { hostname }))) return unauthorized();
 
   const server = await prisma.server.findUnique({ where: { hostname } });
   if (!server) {

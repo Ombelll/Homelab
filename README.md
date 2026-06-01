@@ -163,6 +163,10 @@ Two internal endpoints, both gated by `SWEEP_KEY` (open if unset):
 # Health checks: probe every enabled service whose interval has elapsed.
 * * * * *  curl -fsS -X POST http://dashboard/api/internal/run-health-checks \
   -H "x-sweep-key: $SWEEP_KEY" > /dev/null
+
+# Image updates: check Docker Hub for newer image digests (every 6h per image).
+0 4 * * *  curl -fsS -X POST http://dashboard/api/internal/check-image-updates \
+  -H "x-sweep-key: $SWEEP_KEY" > /dev/null
 ```
 
 The downsample job must run before the retention job for any given hour
@@ -199,10 +203,11 @@ handle it, but a daily prune keeps queries snappy.
 - ✅ Per-disk usage + Linux hwmon sensor readings on the server detail.
 - ✅ Alert ack / snooze / manual resolve, with sustained-N-samples
      openings and maintenance windows.
-- Backup / restore tooling (export + import of the DB).
-- Audit log of admin actions (settings changes, container actions).
-- More granular agent permissions (per-host vs global keys).
-- Wake-on-LAN button + container image update notifications.
+- ✅ Backup / restore tooling (JSON dump + wipe-and-restore).
+- ✅ Audit log of admin actions (Settings → Audit log, with filters).
+- ✅ Per-host agent keys (optional hostname binding on AgentKey).
+- ✅ Wake-on-LAN with per-server MAC address.
+- ✅ Container image update notifications (Docker Hub digest check).
 
 ## Project layout
 

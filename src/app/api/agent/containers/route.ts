@@ -6,8 +6,6 @@ import { containerSyncSchema } from "@/lib/validation";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  if (!(await verifyAgentKey(request))) return unauthorized();
-
   let json: unknown;
   try {
     json = await request.json();
@@ -21,6 +19,10 @@ export async function POST(request: Request) {
       { error: "invalid payload", details: parsed.error.flatten() },
       { status: 400 },
     );
+  }
+
+  if (!(await verifyAgentKey(request, { hostname: parsed.data.hostname }))) {
+    return unauthorized();
   }
 
   const { hostname, containers } = parsed.data;
@@ -54,6 +56,7 @@ export async function POST(request: Request) {
         update: {
           name: c.name,
           image: c.image,
+          imageDigest: c.imageDigest ?? null,
           status: c.status,
           ports: JSON.stringify(c.ports),
           composeProject: c.composeProject ?? null,
@@ -65,6 +68,7 @@ export async function POST(request: Request) {
           dockerId: c.dockerId,
           name: c.name,
           image: c.image,
+          imageDigest: c.imageDigest ?? null,
           status: c.status,
           ports: JSON.stringify(c.ports),
           composeProject: c.composeProject ?? null,

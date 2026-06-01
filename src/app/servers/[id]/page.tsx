@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { ServerMetricsCharts } from "@/components/server-metrics-charts";
+import { ServerActions } from "@/components/server-actions";
+import { getCurrentUser } from "@/lib/session";
 import { formatRelativeTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -27,8 +29,9 @@ async function getData(id: string) {
 }
 
 export default async function ServerDetailPage({ params }: { params: { id: string } }) {
-  const server = await getData(params.id);
+  const [server, user] = await Promise.all([getData(params.id), getCurrentUser()]);
   if (!server) notFound();
+  const isAdmin = user?.role === "admin";
 
   return (
     <>
@@ -48,6 +51,16 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
       />
 
       <ServerMetricsCharts serverId={server.id} />
+
+      {isAdmin ? (
+        <div className="mt-6">
+          <ServerActions
+            serverId={server.id}
+            initialMac={server.macAddress}
+            serverStatus={server.status}
+          />
+        </div>
+      ) : null}
 
       {server.disks.length > 0 || server.sensors.length > 0 ? (
         <div className="mt-6 grid gap-4 lg:grid-cols-2">

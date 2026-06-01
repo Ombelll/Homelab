@@ -25,6 +25,9 @@ model Server {
   os         String?
   status     String    @default("offline")
   lastSeenAt DateTime?
+  // Optional MAC address. When set, the dashboard exposes a Wake-on-LAN
+  // button on the server detail. Format flexible (with/without colons).
+  macAddress String?
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
@@ -133,6 +136,14 @@ model Container {
   name      String
   image     String
   status    String
+
+  // Image digest tracking for "update available" notifications. The agent
+  // reads `ImageID` (the local sha256) from `docker inspect`; a separate
+  // sweep fetches the remote manifest digest and flips updateAvailable.
+  imageDigest      String?
+  remoteDigest     String?
+  updateAvailable  Boolean  @default(false)
+  lastUpdateCheck  DateTime?
   // Stored as JSON string of an array like
   //   [{ "host": "8080", "container": "80", "protocol": "tcp" }]
   // SQLite has no native JSON type, so consumers must JSON.parse.
@@ -330,13 +341,36 @@ model NotificationChannel {
   updatedAt     DateTime  @updatedAt
 }
 
-// AgentKey lets us rotate / scope agent credentials in the future. For MVP we
-// also accept the env var AGENT_API_KEY as a fallback.
+// AgentKey lets us rotate / scope agent credentials. We also accept the env
+// var AGENT_API_KEY as a global fallback.
+//
+// hostname binding: when non-NULL, the key only authenticates requests
+// whose body specifies this exact hostname. This means a leaked per-host
+// key cannot impersonate a different host.
 model AgentKey {
   id          String    @id @default(cuid())
   label       String
   keyHash     String    @unique
+  hostname    String?
   lastUsedAt  DateTime?
   revokedAt   DateTime?
   createdAt   DateTime  @default(now())
+}
+
+// Append-only record of admin / sensitive actions, for after-the-fact
+// review. Read by the Settings → Audit log panel; pruned by the retention
+// sweep along with the rest.
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  actorEmail String? // denormalised so logs survive user deletion
+  action    String
+  target    String?  // e.g. "container:abc123", "user:xyz"
+  metadata  String?  // JSON string
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([action])
+  @@index([userId])
 }

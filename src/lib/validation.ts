@@ -31,6 +31,7 @@ export const containerInputSchema = z.object({
   dockerId: z.string().min(1),
   name: z.string().min(1),
   image: z.string().min(1),
+  imageDigest: z.string().max(255).optional(),
   status: z.string().min(1),
   ports: z.array(containerPortSchema).default([]),
   composeProject: z.string().max(255).optional(),

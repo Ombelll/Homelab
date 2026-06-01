@@ -7,6 +7,7 @@ export type DockerContainer = {
   dockerId: string;
   name: string;
   image: string;
+  imageDigest?: string;
   status: string;
   ports: Array<{ host?: string; container: string; protocol?: string }>;
   composeProject?: string;
@@ -33,6 +34,15 @@ export async function listDockerContainers(): Promise<DockerContainer[] | null> 
       .filter(Boolean)
       .map(parseDockerLine)
       .filter((c): c is DockerContainer => c !== null);
+
+    // Decorate with image digests (best-effort). `docker images --digests`
+    // produces one row per image with both ImageID and Digest. We map by
+    // image reference so each container can find its row.
+    const digests = await readImageDigests().catch(() => new Map<string, string>());
+    for (const c of base) {
+      const d = digests.get(c.image);
+      if (d) c.imageDigest = d;
+    }
 
     // Decorate with stats (best-effort). `docker stats --no-stream` returns
     // one row per running container, with --format json one per line.
@@ -131,6 +141,32 @@ type ContainerStats = {
   memoryBytes: number;
   memoryLimitBytes: number;
 };
+
+/**
+ * Map image reference ("repo:tag") → manifest digest (sha256:…). We read
+ * `docker images --digests --no-trunc` and skip rows where Docker reports
+ * <none> for the digest (locally-built or untagged images).
+ */
+async function readImageDigests(): Promise<Map<string, string>> {
+  const { stdout } = await execAsync(
+    'docker images --digests --no-trunc --format "{{json .}}"',
+    { maxBuffer: 4 * 1024 * 1024 },
+  );
+  const map = new Map<string, string>();
+  for (const line of stdout.split("\n").map((l) => l.trim()).filter(Boolean)) {
+    try {
+      const row = JSON.parse(line) as Record<string, string>;
+      const repo = (row.Repository ?? "").trim();
+      const tag = (row.Tag ?? "").trim();
+      const digest = (row.Digest ?? "").trim();
+      if (!repo || !tag || !digest || digest === "<none>") continue;
+      map.set(`${repo}:${tag}`, digest);
+    } catch {
+      /* skip malformed row */
+    }
+  }
+  return map;
+}
 
 async function readStats(): Promise<Map<string, ContainerStats>> {
   const { stdout } = await execAsync(

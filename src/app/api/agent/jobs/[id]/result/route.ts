@@ -14,8 +14,6 @@ const resultSchema = z.object({
 });
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  if (!(await verifyAgentKey(request))) return unauthorized();
-
   let json: unknown;
   try {
     json = await request.json();
@@ -28,6 +26,10 @@ export async function POST(request: Request, { params }: { params: { id: string 
       { error: "invalid payload", details: parsed.error.flatten() },
       { status: 400 },
     );
+  }
+
+  if (!(await verifyAgentKey(request, { hostname: parsed.data.hostname }))) {
+    return unauthorized();
   }
 
   const job = await prisma.job.findUnique({

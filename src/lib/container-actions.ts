@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { enqueueJob, type JobType } from "@/lib/jobs";
 import { requireAdmin } from "@/lib/authz";
+import { recordAudit, type AuditAction } from "@/lib/audit";
 
 export type ContainerAction = "start" | "stop" | "restart";
 
@@ -35,6 +36,13 @@ export async function dispatchContainerAction(id: string, action: ContainerActio
     serverId: container.serverId,
     type: ACTION_TO_JOB[action],
     payload: { dockerId: container.dockerId, containerName: container.name },
+  });
+
+  void recordAudit({
+    user: guard.user,
+    action: `container.${action}` as AuditAction,
+    target: `container:${container.id}`,
+    metadata: { name: container.name, dockerId: container.dockerId, jobId: job.id },
   });
 
   return NextResponse.json({

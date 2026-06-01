@@ -129,7 +129,21 @@ function Group({
                   <div className="text-[11px] text-muted-foreground">{c.composeService}</div>
                 ) : null}
               </Td>
-              <Td className="font-mono text-xs text-muted-foreground">{c.image}</Td>
+              <Td className="font-mono text-xs text-muted-foreground">
+                <div className="flex items-center gap-1.5">
+                  <span>{c.image}</span>
+                  {c.updateAvailable ? (
+                    <span
+                      title={`Newer image available on the registry${
+                        c.lastUpdateCheck ? ` (checked ${new Date(c.lastUpdateCheck).toLocaleString()})` : ""
+                      }`}
+                      className="rounded bg-warning/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-warning"
+                    >
+                      update
+                    </span>
+                  ) : null}
+                </div>
+              </Td>
               <Td><StatusBadge status={c.status} /></Td>
               <Td className="tabular-nums">
                 {c.cpuPercent != null

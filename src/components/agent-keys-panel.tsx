@@ -7,6 +7,7 @@ import { formatRelativeTime } from "@/lib/utils";
 type Key = {
   id: string;
   label: string;
+  hostname: string | null;
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
@@ -16,8 +17,9 @@ export function AgentKeysPanel() {
   const [keys, setKeys] = useState<Key[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [label, setLabel] = useState("");
+  const [hostname, setHostname] = useState("");
   const [creating, setCreating] = useState(false);
-  const [revealed, setRevealed] = useState<{ label: string; key: string } | null>(null);
+  const [revealed, setRevealed] = useState<{ label: string; key: string; hostname: string | null } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function load() {
@@ -43,12 +45,16 @@ export function AgentKeysPanel() {
       const res = await fetch("/api/agent-keys", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ label: label.trim() }),
+        body: JSON.stringify({
+          label: label.trim(),
+          hostname: hostname.trim() || null,
+        }),
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      setRevealed({ label: data.label, key: data.key });
+      setRevealed({ label: data.label, key: data.key, hostname: data.hostname ?? null });
       setLabel("");
+      setHostname("");
       await load();
     } catch (err) {
       setError(`create failed: ${(err as Error).message}`);
@@ -84,14 +90,22 @@ export function AgentKeysPanel() {
         revokable credential.
       </p>
 
-      <form onSubmit={create} className="mb-4 flex gap-2">
+      <form onSubmit={create} className="mb-4 flex flex-wrap gap-2">
         <input
           type="text"
           placeholder="Label (e.g. bravo.lan)"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="min-w-[10rem] flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
           maxLength={64}
+        />
+        <input
+          type="text"
+          placeholder="Bind to hostname (optional)"
+          value={hostname}
+          onChange={(e) => setHostname(e.target.value)}
+          className="min-w-[10rem] flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          maxLength={255}
         />
         <button
           type="submit"
@@ -105,7 +119,14 @@ export function AgentKeysPanel() {
 
       {revealed ? (
         <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
-          <div className="mb-2 font-medium">New key for &ldquo;{revealed.label}&rdquo;</div>
+          <div className="mb-2 flex items-center gap-1.5 font-medium">
+            <span>New key for &ldquo;{revealed.label}&rdquo;</span>
+            {revealed.hostname ? (
+              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                bound to {revealed.hostname}
+              </span>
+            ) : null}
+          </div>
           <div className="mb-2 text-xs text-muted-foreground">
             Copy it now — it will not be shown again.
           </div>
@@ -142,6 +163,7 @@ export function AgentKeysPanel() {
           <thead className="text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="py-2 text-left font-medium">Label</th>
+              <th className="py-2 text-left font-medium">Scope</th>
               <th className="py-2 text-left font-medium">Created</th>
               <th className="py-2 text-left font-medium">Last used</th>
               <th className="py-2 text-left font-medium">Status</th>
@@ -152,6 +174,13 @@ export function AgentKeysPanel() {
             {keys.map((k) => (
               <tr key={k.id}>
                 <td className="py-2 font-medium">{k.label}</td>
+                <td className="py-2 text-muted-foreground">
+                  {k.hostname ? (
+                    <span className="font-mono text-xs">{k.hostname}</span>
+                  ) : (
+                    <span className="text-xs">global</span>
+                  )}
+                </td>
                 <td className="py-2 text-muted-foreground">{formatRelativeTime(k.createdAt)}</td>
                 <td className="py-2 text-muted-foreground">{formatRelativeTime(k.lastUsedAt)}</td>
                 <td className="py-2">

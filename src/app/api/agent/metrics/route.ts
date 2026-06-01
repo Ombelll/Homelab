@@ -7,8 +7,6 @@ import { evaluateMetricAlerts } from "@/lib/alerts";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  if (!(await verifyAgentKey(request))) return unauthorized();
-
   let json: unknown;
   try {
     json = await request.json();
@@ -22,6 +20,10 @@ export async function POST(request: Request) {
       { error: "invalid payload", details: parsed.error.flatten() },
       { status: 400 },
     );
+  }
+
+  if (!(await verifyAgentKey(request, { hostname: parsed.data.hostname }))) {
+    return unauthorized();
   }
 
   const { hostname, cpuPercent, memoryPercent, diskPercent } = parsed.data;

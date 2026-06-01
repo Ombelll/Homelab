@@ -8,8 +8,6 @@ export const dynamic = "force-dynamic";
 // Agents call this once on startup and (optionally) periodically to register
 // themselves and refresh metadata like OS / IP. Metrics are sent separately.
 export async function POST(request: Request) {
-  if (!(await verifyAgentKey(request))) return unauthorized();
-
   let json: unknown;
   try {
     json = await request.json();
@@ -23,6 +21,12 @@ export async function POST(request: Request) {
       { error: "invalid payload", details: parsed.error.flatten() },
       { status: 400 },
     );
+  }
+
+  // Verify auth after parsing so we can enforce hostname binding on
+  // per-host AgentKeys.
+  if (!(await verifyAgentKey(request, { hostname: parsed.data.hostname }))) {
+    return unauthorized();
   }
 
   const { hostname, name, ipAddress, os, status } = parsed.data;

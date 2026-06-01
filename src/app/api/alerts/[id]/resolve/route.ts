@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/authz";
+import { recordAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,12 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   await prisma.alert.update({
     where: { id: alert.id },
     data: { resolved: true },
+  });
+  void recordAudit({
+    user: guard.user,
+    action: "alert.resolve",
+    target: `alert:${alert.id}`,
+    metadata: { type: alert.type, severity: alert.severity },
   });
   return NextResponse.json({ ok: true });
 }
