@@ -26,7 +26,7 @@ const nav = [
 export function Sidebar({
   user,
 }: {
-  user: { id: string; email: string; name: string | null };
+  user: { id: string; email: string; name: string | null; role: "admin" | "viewer" };
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -79,7 +79,19 @@ export function Sidebar({
 
       <div className="mt-auto space-y-2 px-2 pt-6">
         <div className="rounded-md border border-border bg-background/40 px-3 py-2 text-xs">
-          <div className="truncate font-medium">{user.name || user.email}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="truncate font-medium">{user.name || user.email}</span>
+            <span
+              className={cn(
+                "rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide",
+                user.role === "admin"
+                  ? "bg-primary/15 text-primary"
+                  : "bg-muted text-muted-foreground",
+              )}
+            >
+              {user.role}
+            </span>
+          </div>
           {user.name ? (
             <div className="truncate text-muted-foreground">{user.email}</div>
           ) : null}
@@ -97,7 +109,7 @@ export function Sidebar({
           )}
           Sign out
         </button>
-        <div className="text-[11px] text-muted-foreground">v0.4.0</div>
+        <div className="text-[11px] text-muted-foreground">v1.0.0</div>
       </div>
     </aside>
   );

@@ -10,6 +10,7 @@ export function hashInviteToken(raw: string): string {
 export async function createInvite(input: {
   createdByUserId: string;
   emailHint?: string;
+  role?: "admin" | "viewer";
   ttlMs?: number;
 }) {
   const token = randomBytes(24).toString("hex");
@@ -18,10 +19,11 @@ export async function createInvite(input: {
     data: {
       tokenHash: hashInviteToken(token),
       emailHint: input.emailHint?.toLowerCase() || null,
+      role: input.role ?? "viewer",
       expiresAt,
       createdByUserId: input.createdByUserId,
     },
-    select: { id: true, emailHint: true, expiresAt: true, createdAt: true },
+    select: { id: true, emailHint: true, role: true, expiresAt: true, createdAt: true },
   });
   return { ...record, token };
 }

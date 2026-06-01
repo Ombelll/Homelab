@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { enqueueJob } from "@/lib/jobs";
+import { requireAdmin } from "@/lib/authz";
 
 export const dynamic = "force-dynamic";
 
 // Enqueues a logs job for the host agent. The UI polls /api/jobs/<id> until
 // the agent posts back lines in the result.
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+
   const container = await prisma.container.findUnique({
     where: { id: params.id },
     select: { id: true, name: true, dockerId: true, serverId: true },

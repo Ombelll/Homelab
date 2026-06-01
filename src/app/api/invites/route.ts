@@ -1,18 +1,19 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/session";
+import { requireAdmin } from "@/lib/authz";
 import { createInvite } from "@/lib/invites";
 
 export const dynamic = "force-dynamic";
 
 const createSchema = z.object({
   emailHint: z.string().email().max(255).optional(),
+  role: z.enum(["admin", "viewer"]).default("viewer"),
 });
 
 export async function GET() {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
 
   const invites = await prisma.invite.findMany({
     orderBy: { createdAt: "desc" },
@@ -20,6 +21,7 @@ export async function GET() {
     select: {
       id: true,
       emailHint: true,
+      role: true,
       expiresAt: true,
       usedAt: true,
       createdAt: true,
@@ -30,8 +32,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  const user = guard.user;
 
   let json: unknown = {};
   try {
@@ -50,6 +53,7 @@ export async function POST(request: Request) {
   const invite = await createInvite({
     createdByUserId: user.id,
     emailHint: parsed.data.emailHint,
+    role: parsed.data.role,
   });
 
   // Plaintext token is returned exactly once. Caller should hand the

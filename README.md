@@ -4,9 +4,9 @@ A clean, self-hostable web dashboard for monitoring and managing the servers
 and Docker containers in your homelab. Built with Next.js (App Router),
 TypeScript, Tailwind, Prisma + SQLite, and a lightweight Node.js agent.
 
-> Status: **MVP (v0.1)**. Stable enough to monitor a small fleet. Container
-> control endpoints are wired up but the agent-side execution path is mocked
-> — see the roadmap below.
+> Status: **v1.0**. Auth (incl. RBAC), real container control via a per-host
+> agent, live log streaming, threshold alerts with Discord/ntfy/webhook/SMTP
+> notifications, metric downsampling, invite flow, SQLite or Postgres.
 
 ## Features
 
@@ -183,10 +183,12 @@ handle it, but a daily prune keeps queries snappy.
 - ✅ Live log streaming (SSE + chunked uploads from agent, with cancel).
 - ✅ Invite flow for additional users (Settings → Invite users).
 - ✅ Postgres support (`docker-compose.postgres.yml` + scripts).
-- ✅ Notification integrations: Discord, ntfy, generic JSON webhook.
+- ✅ Notification integrations: Discord, ntfy, generic JSON webhook, SMTP/email.
 - ✅ Downsampling for the metric table (hourly avg/max per server).
-- Per-user roles (read-only viewer vs. admin).
-- SMTP / email notification channel.
+- ✅ Per-user roles (admin vs. viewer, enforced server-side and in the UI).
+- Backup / restore tooling (export + import of the DB).
+- Audit log of admin actions (settings changes, container actions).
+- More granular agent permissions (per-host vs global keys).
 
 ## Project layout
 

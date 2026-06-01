@@ -157,13 +157,18 @@ model Alert {
   @@index([resolved, createdAt])
 }
 
-// Dashboard users. Single-tenant for now: anyone with a User row gets full
-// access to the UI. Multi-role / RBAC is on the roadmap.
+// Dashboard users.
+//   role = "admin"  → full read/write across the dashboard
+//   role = "viewer" → read-only: no container actions, no settings changes
+//
+// The bootstrap user (first registration) is always created as "admin".
+// Subsequent users are created via Invite and inherit the invite's role.
 model User {
   id           String    @id @default(cuid())
   email        String    @unique
   name         String?
   passwordHash String
+  role         String    @default("admin")
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -178,6 +183,7 @@ model Invite {
   id             String    @id @default(cuid())
   tokenHash      String    @unique
   emailHint      String?
+  role           String    @default("viewer")
   expiresAt      DateTime
   usedAt         DateTime?
   createdByUserId String?

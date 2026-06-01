@@ -43,7 +43,12 @@ export async function POST(request: Request) {
 
   const passwordHash = await hashPassword(parsed.data.password);
   const user = await prisma.user.create({
-    data: { email, name: parsed.data.name?.trim() || null, passwordHash },
+    data: {
+      email,
+      name: parsed.data.name?.trim() || null,
+      passwordHash,
+      role: result.invite.role === "admin" ? "admin" : "viewer",
+    },
   });
 
   await markInviteUsed(result.invite.id);

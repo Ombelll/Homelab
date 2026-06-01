@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { Copy, Loader2, Mail, Trash2, UserPlus } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 
+type InviteRole = "admin" | "viewer";
 type Invite = {
   id: string;
   emailHint: string | null;
+  role: InviteRole;
   expiresAt: string;
   usedAt: string | null;
   createdAt: string;
@@ -16,9 +18,10 @@ type Invite = {
 export function InvitesPanel() {
   const [invites, setInvites] = useState<Invite[] | null>(null);
   const [emailHint, setEmailHint] = useState("");
+  const [inviteRole, setInviteRole] = useState<InviteRole>("viewer");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [revealed, setRevealed] = useState<{ acceptUrl: string; emailHint: string | null } | null>(null);
+  const [revealed, setRevealed] = useState<{ acceptUrl: string; emailHint: string | null; role: InviteRole } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function load() {
@@ -43,14 +46,17 @@ export function InvitesPanel() {
       const res = await fetch("/api/invites", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(emailHint ? { emailHint } : {}),
+        body: JSON.stringify({
+          role: inviteRole,
+          ...(emailHint ? { emailHint } : {}),
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || `create failed (${res.status})`);
       }
       const data = await res.json();
-      setRevealed({ acceptUrl: data.acceptUrl, emailHint: data.emailHint });
+      setRevealed({ acceptUrl: data.acceptUrl, emailHint: data.emailHint, role: inviteRole });
       setEmailHint("");
       await load();
     } catch (e) {
@@ -86,15 +92,23 @@ export function InvitesPanel() {
         (chat, password manager). The token is shown exactly once.
       </p>
 
-      <form onSubmit={create} className="mb-4 flex gap-2">
+      <form onSubmit={create} className="mb-4 flex flex-wrap gap-2">
         <input
           type="email"
           placeholder="Email hint (optional, prefills the form)"
           value={emailHint}
           onChange={(e) => setEmailHint(e.target.value)}
-          className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="min-w-[12rem] flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
           maxLength={255}
         />
+        <select
+          value={inviteRole}
+          onChange={(e) => setInviteRole(e.target.value as InviteRole)}
+          className="rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="viewer">Viewer (read-only)</option>
+          <option value="admin">Admin (full access)</option>
+        </select>
         <button
           type="submit"
           disabled={creating}
@@ -109,6 +123,9 @@ export function InvitesPanel() {
         <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
           <div className="mb-2 flex items-center gap-2 font-medium">
             <Mail className="h-3.5 w-3.5" /> Invite link
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+              {revealed.role}
+            </span>
             {revealed.emailHint ? (
               <span className="text-xs font-normal text-muted-foreground">
                 for {revealed.emailHint}
@@ -151,6 +168,7 @@ export function InvitesPanel() {
           <thead className="text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="py-2 text-left font-medium">For</th>
+              <th className="py-2 text-left font-medium">Role</th>
               <th className="py-2 text-left font-medium">Created</th>
               <th className="py-2 text-left font-medium">Expires</th>
               <th className="py-2 text-left font-medium">Status</th>
@@ -163,6 +181,7 @@ export function InvitesPanel() {
                 <td className="py-2">
                   {i.emailHint ?? <span className="text-muted-foreground">—</span>}
                 </td>
+                <td className="py-2 text-muted-foreground">{i.role}</td>
                 <td className="py-2 text-muted-foreground">{formatRelativeTime(i.createdAt)}</td>
                 <td className="py-2 text-muted-foreground">{formatRelativeTime(i.expiresAt)}</td>
                 <td className="py-2">{statusFor(i)}</td>

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { ContainerActions } from "@/components/container-actions";
+import { getCurrentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,8 @@ async function getContainers() {
 }
 
 export default async function ContainersPage() {
-  const containers = await getContainers();
+  const [containers, user] = await Promise.all([getContainers(), getCurrentUser()]);
+  const canControl = user?.role === "admin";
 
   return (
     <>
@@ -78,7 +80,11 @@ export default async function ContainersPage() {
                     )}
                   </Td>
                   <Td className="text-right">
-                    <ContainerActions id={c.id} name={c.name} status={c.status} />
+                    {canControl ? (
+                      <ContainerActions id={c.id} name={c.name} status={c.status} />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">view only</span>
+                    )}
                   </Td>
                 </tr>
               ))
@@ -88,9 +94,10 @@ export default async function ContainersPage() {
       </div>
 
       <p className="mt-4 text-xs text-muted-foreground">
-        Actions enqueue a job for the host agent and wait up to 30 seconds for
-        the result. If the agent is offline the UI surfaces a timeout. See{" "}
-        <code>AGENTS.md</code> for the protocol.
+        {canControl
+          ? "Actions enqueue a job for the host agent and wait up to 30 seconds for the result. If the agent is offline the UI surfaces a timeout."
+          : "Your viewer role can read container state but not start, stop, or stream logs. Ask an admin if you need control."}{" "}
+        See <code>AGENTS.md</code> for the protocol.
       </p>
     </>
   );

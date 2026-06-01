@@ -50,4 +50,38 @@ describe("validateChannelConfig", () => {
     expect(validateChannelConfig("webhook", {}).ok).toBe(false);
     expect(validateChannelConfig("webhook", { url: "https://example/post" }).ok).toBe(true);
   });
+
+  it("smtp requires host/user/password/from/to and defaults port", () => {
+    const ok = validateChannelConfig("smtp", {
+      host: "smtp.example.com",
+      user: "u",
+      password: "p",
+      from: "a@b.c",
+      to: "x@y.z",
+    });
+    expect(ok.ok).toBe(true);
+    if (ok.ok) {
+      const v = ok.value as { port: number; secure: boolean };
+      expect(v.port).toBe(587);
+      expect(v.secure).toBe(false);
+    }
+    expect(validateChannelConfig("smtp", { host: "smtp.example.com" }).ok).toBe(false);
+  });
+});
+
+describe("redactConfig (smtp)", () => {
+  it("masks the smtp password but keeps host + from + to visible", () => {
+    const out = redactConfig("smtp", {
+      host: "smtp.example.com",
+      port: 587,
+      user: "u",
+      password: "supersecret",
+      from: "a@b.c",
+      to: "x@y.z",
+    }) as Record<string, unknown>;
+    expect(out.host).toBe("smtp.example.com");
+    expect(out.from).toBe("a@b.c");
+    expect(out.password).toBe("***");
+    expect(out.secretSet).toBe(true);
+  });
 });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/session";
+import { requireAdmin, requireUser } from "@/lib/authz";
 import {
   CHANNEL_TYPES,
   redactConfig,
@@ -20,8 +20,8 @@ const createSchema = z.object({
 });
 
 export async function GET() {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const guard = await requireUser();
+  if (!guard.ok) return guard.response;
 
   const channels = await prisma.notificationChannel.findMany({
     orderBy: { createdAt: "asc" },
@@ -42,8 +42,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
 
   let json: unknown;
   try {

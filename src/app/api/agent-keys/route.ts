@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { requireAdmin, requireUser } from "@/lib/authz";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,8 @@ const createSchema = z.object({
 });
 
 export async function GET() {
+  const guard = await requireUser();
+  if (!guard.ok) return guard.response;
   const keys = await prisma.agentKey.findMany({
     orderBy: { createdAt: "desc" },
     select: {
@@ -24,6 +27,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+
   let json: unknown;
   try {
     json = await request.json();

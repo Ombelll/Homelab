@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { enqueueJob, type JobType } from "@/lib/jobs";
+import { requireAdmin } from "@/lib/authz";
 
 export type ContainerAction = "start" | "stop" | "restart";
 
@@ -18,6 +19,9 @@ const ACTION_TO_JOB: Record<ContainerAction, JobType> = {
  * terminal state.
  */
 export async function dispatchContainerAction(id: string, action: ContainerAction) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+
   const container = await prisma.container.findUnique({
     where: { id },
     select: { id: true, name: true, dockerId: true, serverId: true, status: true },

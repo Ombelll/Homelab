@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Bell, Loader2, Send, Trash2 } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 
-type ChannelType = "discord" | "ntfy" | "webhook";
+type ChannelType = "discord" | "ntfy" | "webhook" | "smtp";
 
 type Channel = {
   id: string;
@@ -208,6 +208,15 @@ function NewChannelForm({ onCreated }: { onCreated: () => void }) {
   const [ntfyToken, setNtfyToken] = useState("");
   const [webhookGenericUrl, setWebhookGenericUrl] = useState("");
 
+  // SMTP fields.
+  const [smtpHost, setSmtpHost] = useState("");
+  const [smtpPort, setSmtpPort] = useState("587");
+  const [smtpSecure, setSmtpSecure] = useState(false);
+  const [smtpUser, setSmtpUser] = useState("");
+  const [smtpPassword, setSmtpPassword] = useState("");
+  const [smtpFrom, setSmtpFrom] = useState("");
+  const [smtpTo, setSmtpTo] = useState("");
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -219,6 +228,16 @@ function NewChannelForm({ onCreated }: { onCreated: () => void }) {
         ? { server: ntfyServer, topic: ntfyTopic, token: ntfyToken }
         : { server: ntfyServer, topic: ntfyTopic };
       if (type === "webhook") config = { url: webhookGenericUrl };
+      if (type === "smtp")
+        config = {
+          host: smtpHost,
+          port: Number.parseInt(smtpPort, 10) || 587,
+          secure: smtpSecure,
+          user: smtpUser,
+          password: smtpPassword,
+          from: smtpFrom,
+          to: smtpTo,
+        };
 
       const res = await fetch("/api/notification-channels", {
         method: "POST",
@@ -261,6 +280,7 @@ function NewChannelForm({ onCreated }: { onCreated: () => void }) {
             <option value="discord">Discord webhook</option>
             <option value="ntfy">ntfy</option>
             <option value="webhook">Generic JSON webhook</option>
+            <option value="smtp">SMTP (email)</option>
           </select>
         </Field>
         <Field label="Minimum severity">
@@ -328,6 +348,79 @@ function NewChannelForm({ onCreated }: { onCreated: () => void }) {
             required
           />
         </Field>
+      ) : null}
+
+      {type === "smtp" ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Host">
+            <input
+              className={inputClass}
+              value={smtpHost}
+              onChange={(e) => setSmtpHost(e.target.value)}
+              placeholder="smtp.example.com"
+              required
+            />
+          </Field>
+          <Field label="Port">
+            <input
+              type="number"
+              min={1}
+              max={65535}
+              className={inputClass}
+              value={smtpPort}
+              onChange={(e) => setSmtpPort(e.target.value)}
+              required
+            />
+          </Field>
+          <Field label="Username">
+            <input
+              className={inputClass}
+              value={smtpUser}
+              onChange={(e) => setSmtpUser(e.target.value)}
+              autoComplete="off"
+              required
+            />
+          </Field>
+          <Field label="Password">
+            <input
+              type="password"
+              className={inputClass}
+              value={smtpPassword}
+              onChange={(e) => setSmtpPassword(e.target.value)}
+              autoComplete="off"
+              required
+            />
+          </Field>
+          <Field label="From">
+            <input
+              type="email"
+              className={inputClass}
+              value={smtpFrom}
+              onChange={(e) => setSmtpFrom(e.target.value)}
+              placeholder="alerts@example.com"
+              required
+            />
+          </Field>
+          <Field label="To">
+            <input
+              type="email"
+              className={inputClass}
+              value={smtpTo}
+              onChange={(e) => setSmtpTo(e.target.value)}
+              placeholder="me@example.com"
+              required
+            />
+          </Field>
+          <label className="col-span-2 inline-flex items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={smtpSecure}
+              onChange={(e) => setSmtpSecure(e.target.checked)}
+            />
+            Use SMTPS (TLS on connect) — usually on port 465. Leave off for
+            port 587 with STARTTLS.
+          </label>
+        </div>
       ) : null}
 
       {error ? <div className="text-sm text-destructive">{error}</div> : null}

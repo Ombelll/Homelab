@@ -1,7 +1,8 @@
 import { z } from "zod";
+import nodemailer from "nodemailer";
 import { prisma } from "@/lib/prisma";
 
-export const CHANNEL_TYPES = ["discord", "ntfy", "webhook"] as const;
+export const CHANNEL_TYPES = ["discord", "ntfy", "webhook", "smtp"] as const;
 export type ChannelType = (typeof CHANNEL_TYPES)[number];
 
 export const SEVERITY_RANK: Record<string, number> = {
@@ -25,6 +26,17 @@ export const webhookConfigSchema = z.object({
   headers: z.record(z.string()).optional(),
 });
 
+export const smtpConfigSchema = z.object({
+  host: z.string().min(1).max(255),
+  port: z.coerce.number().int().min(1).max(65535).default(587),
+  // STARTTLS on 587 is the most common; flip to true for SMTPS on 465.
+  secure: z.boolean().default(false),
+  user: z.string().min(1).max(255),
+  password: z.string().min(1).max(1024),
+  from: z.string().min(3).max(255),
+  to: z.string().min(3).max(255),
+});
+
 export function validateChannelConfig(
   type: ChannelType,
   raw: unknown,
@@ -34,7 +46,9 @@ export function validateChannelConfig(
       ? discordConfigSchema
       : type === "ntfy"
       ? ntfyConfigSchema
-      : webhookConfigSchema;
+      : type === "webhook"
+      ? webhookConfigSchema
+      : smtpConfigSchema;
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
     const msg = parsed.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join("; ");
@@ -51,7 +65,7 @@ export type AlertNotification = {
   createdAt: Date;
 };
 
-const SECRET_KEYS = new Set(["webhookUrl", "token", "url", "headers"]);
+const SECRET_KEYS = new Set(["webhookUrl", "token", "url", "headers", "password"]);
 
 /**
  * Strip secrets out of a channel config before sending it to the UI.
@@ -82,6 +96,7 @@ export function redactConfig(type: ChannelType, raw: unknown): unknown {
   if (type === "discord") out.secretSet = "webhookUrl" in (raw as object);
   if (type === "ntfy") out.secretSet = "token" in (raw as object);
   if (type === "webhook") out.secretSet = "url" in (raw as object);
+  if (type === "smtp") out.secretSet = "password" in (raw as object);
   return out;
 }
 
@@ -170,6 +185,33 @@ export async function sendToChannel(
         message: alert.message,
         at: alert.createdAt.toISOString(),
       }, cfg.headers);
+      return;
+    }
+    case "smtp": {
+      const cfg = smtpConfigSchema.parse(rawConfig);
+      const transporter = nodemailer.createTransport({
+        host: cfg.host,
+        port: cfg.port,
+        secure: cfg.secure,
+        auth: { user: cfg.user, pass: cfg.password },
+      });
+      const subject = `[${alert.severity.toUpperCase()}] ${alert.serverName ?? "system"} · ${alert.type}`;
+      const text = [
+        alert.message,
+        "",
+        `Server: ${alert.serverName ?? "system"}`,
+        `Type: ${alert.type}`,
+        `Severity: ${alert.severity}`,
+        `When: ${alert.createdAt.toISOString()}`,
+        "",
+        "— Homelab Control Center",
+      ].join("\n");
+      await transporter.sendMail({
+        from: cfg.from,
+        to: cfg.to,
+        subject,
+        text,
+      });
       return;
     }
   }

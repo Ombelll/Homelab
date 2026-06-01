@@ -1,11 +1,39 @@
+import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { AgentKeysPanel } from "@/components/agent-keys-panel";
 import { InvitesPanel } from "@/components/invites-panel";
 import { NotificationsPanel } from "@/components/notifications-panel";
+import { UsersPanel } from "@/components/users-panel";
+import { getCurrentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const user = await getCurrentUser();
+  // Viewers can navigate everywhere else but the Settings page is admin-only.
+  // We surface 'access denied' rather than redirecting so the user sees why.
+  if (user && user.role !== "admin") {
+    return (
+      <>
+        <PageHeader title="Settings" />
+        <div className="rounded-xl border border-warning/30 bg-warning/5 p-6 text-sm">
+          <div className="mb-1 font-semibold">Admin access required</div>
+          <div className="text-muted-foreground">
+            Your account has the <code>viewer</code> role. Ask an admin to
+            upgrade you if you need to manage agents, invites, or
+            notifications.
+          </div>
+        </div>
+      </>
+    );
+  }
+  // Middleware should have redirected unauthenticated users already; defensive
+  // fallback just in case.
+  if (!user) redirect("/login");
+  return <AdminSettings />;
+}
+
+function AdminSettings() {
   const hasAgentKey = Boolean(process.env.AGENT_API_KEY && process.env.AGENT_API_KEY.length > 16);
   const dbUrl = process.env.DATABASE_URL ?? "(unset)";
   const safeDb = dbUrl.replace(/(:\/\/[^:]+:)[^@]+(@)/, "$1***$2");
@@ -18,6 +46,8 @@ export default function SettingsPage() {
       />
 
       <div className="space-y-4">
+        <UsersPanel />
+
         <Card title="Authentication">
           <Row label="AGENT_API_KEY">
             {hasAgentKey ? (
