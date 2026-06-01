@@ -23,10 +23,14 @@ yarn-error.log*
 next-env.d.ts
 
 # database
-prisma/dev.db
-prisma/dev.db-journal
+*.db
+*.db-journal
 *.sqlite
 *.sqlite3
+# Defensive: prisma resolves relative DATABASE_URLs from the schema dir,
+# which can create a nested prisma/prisma/ when you set the URL from a
+# different CWD. Ignore the whole nested dir.
+prisma/prisma/
 
 # editor / os
 .DS_Store
