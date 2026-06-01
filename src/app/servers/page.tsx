@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
@@ -49,7 +50,11 @@ export default async function ServersPage() {
                 const m = s.metrics[0];
                 return (
                   <tr key={s.id} className="hover:bg-muted/20">
-                    <Td className="font-medium">{s.name}</Td>
+                    <Td className="font-medium">
+                      <Link href={`/servers/${s.id}`} className="hover:text-primary hover:underline">
+                        {s.name}
+                      </Link>
+                    </Td>
                     <Td>
                       <div>{s.hostname}</div>
                       <div className="text-xs text-muted-foreground">{s.ipAddress ?? "—"}</div>

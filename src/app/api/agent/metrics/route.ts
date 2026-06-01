@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { unauthorized, verifyAgentKey } from "@/lib/auth";
 import { metricsSchema } from "@/lib/validation";
+import { evaluateMetricAlerts } from "@/lib/alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,14 @@ export async function POST(request: Request) {
   await prisma.server.update({
     where: { id: server.id },
     data: { status, lastSeenAt: new Date() },
+  });
+
+  await evaluateMetricAlerts({
+    serverId: server.id,
+    serverName: server.name,
+    cpuPercent,
+    memoryPercent,
+    diskPercent,
   });
 
   return NextResponse.json({ ok: true, metricId: metric.id, status });

@@ -1,0 +1,7 @@
+{
+  "extends": "next/core-web-vitals",
+  "ignorePatterns": ["agent/", "node_modules/", ".next/", "prisma/"],
+  "rules": {
+    "@next/next/no-html-link-for-pages": "off"
+  }
+}
