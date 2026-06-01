@@ -88,8 +88,9 @@ export default async function ContainersPage() {
       </div>
 
       <p className="mt-4 text-xs text-muted-foreground">
-        Start / stop / restart and log retrieval are wired through the agent. In MVP they
-        update local DB state and return a stub job id — see <code>AGENTS.md</code>.
+        Actions enqueue a job for the host agent and wait up to 30 seconds for
+        the result. If the agent is offline the UI surfaces a timeout. See{" "}
+        <code>AGENTS.md</code> for the protocol.
       </p>
     </>
   );

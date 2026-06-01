@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/page-header";
+import { AgentKeysPanel } from "@/components/agent-keys-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,8 @@ export default function SettingsPage() {
             SQLite is the default. Swap the provider in <code>prisma/schema.prisma</code> for Postgres later.
           </p>
         </Card>
+
+        <AgentKeysPanel />
 
         <Card title="Hardening checklist">
           <ul className="ml-4 list-disc space-y-1 text-sm text-muted-foreground">

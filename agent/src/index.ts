@@ -8,6 +8,7 @@ import {
   getOsDescription,
 } from "./collector.js";
 import { listDockerContainers } from "./docker.js";
+import { startJobRunner } from "./runner.js";
 
 let dockerWarned = false;
 
@@ -62,6 +63,10 @@ async function main() {
 
   // Periodically re-check in so renamed hostnames / new IPs propagate.
   setInterval(() => safeRun(checkin, "checkin"), 15 * 60 * 1000);
+
+  // Start polling the dashboard for jobs (container start/stop/restart/logs).
+  startJobRunner();
+  console.log("[agent] job runner started — polling every 3s");
 }
 
 async function safeRun(fn: () => Promise<void>, label: string) {

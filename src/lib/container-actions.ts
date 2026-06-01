@@ -1,48 +1,43 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { enqueueJob, type JobType } from "@/lib/jobs";
 
 export type ContainerAction = "start" | "stop" | "restart";
 
+const ACTION_TO_JOB: Record<ContainerAction, JobType> = {
+  start: "container.start",
+  stop: "container.stop",
+  restart: "container.restart",
+};
+
 /**
- * Placeholder Docker control flow.
+ * Enqueue a container action for the agent on the container's host. The
+ * dashboard never executes `docker` itself — see AGENTS.md for the reasoning.
  *
- * SECURITY: We deliberately do NOT exec `docker` against the host or talk to
- * the Docker socket from the dashboard. Mounting /var/run/docker.sock into the
- * dashboard container is effectively root-equivalent: anyone who can reach the
- * dashboard could spawn privileged containers, mount the host filesystem, and
- * escape. The intended design is:
- *
- *   dashboard  --(authenticated job queue)-->  per-host agent  -->  docker
- *
- * For MVP these endpoints update DB state optimistically and return a stub
- * jobId. Wire the real path when the agent grows a command channel — see
- * AGENTS.md → "Future Docker control flow".
+ * Returns the job id; the UI then polls /api/jobs/<id> until it reaches a
+ * terminal state.
  */
 export async function dispatchContainerAction(id: string, action: ContainerAction) {
   const container = await prisma.container.findUnique({
     where: { id },
-    include: { server: true },
+    select: { id: true, name: true, dockerId: true, serverId: true, status: true },
   });
 
   if (!container) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
-  const nextStatus = action === "stop" ? "exited" : "running";
-
-  await prisma.container.update({
-    where: { id },
-    data: { status: nextStatus },
+  const job = await enqueueJob({
+    serverId: container.serverId,
+    type: ACTION_TO_JOB[action],
+    payload: { dockerId: container.dockerId, containerName: container.name },
   });
-
-  // TODO: enqueue real job for the host agent (see AGENTS.md).
-  const jobId = `mock-${action}-${Date.now()}`;
 
   return NextResponse.json({
     ok: true,
-    mocked: true,
-    jobId,
+    jobId: job.id,
+    status: job.status,
     action,
-    container: { id: container.id, name: container.name, status: nextStatus },
+    container: { id: container.id, name: container.name },
   });
 }

@@ -119,17 +119,33 @@ fresh, `docker compose down -v`.
 - All agent input is validated with Zod before hitting the database.
 - All API responses are JSON and avoid leaking stack traces.
 
+## Scheduled sweep (offline detection)
+
+A maintenance endpoint flips servers to `offline` and opens "agent-missing"
+alerts when a host hasn't checked in for >5 minutes. Hit it from cron or
+any external scheduler:
+
+```bash
+* * * * * curl -fsS -X POST http://dashboard/api/internal/sweep \
+  -H "x-sweep-key: $SWEEP_KEY" > /dev/null
+```
+
+If `SWEEP_KEY` is unset on the dashboard the endpoint is open (acceptable
+behind a VPN). Set it to a long random string for any other deployment.
+
 ## Roadmap
 
-- Real Docker control: agent command channel + signed jobs.
-- Live container logs streaming.
-- Alert rules engine with thresholds + cooldown.
-- Historical charts (sparklines per server) with downsampling.
-- Per-agent API keys (rotation, revocation, last-used auditing) — the
-  `AgentKey` table is already in place.
+- ✅ Real Docker control via agent job queue.
+- ✅ Container log retrieval (`docker logs --tail`).
+- ✅ Threshold-based alert engine with auto-resolve.
+- ✅ Historical sparklines on the server detail page.
+- ✅ Per-agent API keys with revocation (Settings → Agent API keys).
+- ✅ Offline detection sweep.
+- Live log streaming (right now logs are a one-shot tail).
 - Multi-user auth (currently the dashboard assumes trusted single-tenant
   access behind a VPN).
 - Postgres support (Prisma provider swap + migration).
+- Downsampling for the metric table (retention job).
 
 ## Project layout
 

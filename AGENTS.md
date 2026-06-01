@@ -80,39 +80,62 @@ which keys are still in use.
 - Rotate periodically; for now rotation means updating the env var on both
   ends. Per-agent keys (with overlap windows) are on the roadmap.
 
-## Future Docker control flow
+## Docker control flow
 
-The dashboard exposes `POST /api/containers/[id]/{start,stop,restart}` and a
-GET `/api/containers/[id]/logs` route. **In MVP they update DB state and
-return a mock job id** — they do not actually run anything against Docker.
-
-The planned design when we go live:
+Container start / stop / restart and log retrieval are real — not mocked.
+They flow through an authenticated job queue:
 
 ```
-dashboard                                 agent on target host
-─────────                                 ──────────────────
+dashboard                                       agent on target host
+─────────                                       ──────────────────
 POST /api/containers/<id>/stop
-  → enqueue job(serverId, containerDockerId, "stop")
+  → enqueueJob(serverId, "container.stop", {dockerId})
+  ← { jobId }
 
-(agent long-polls or holds an SSE/WebSocket open)
-                          ◄── job push ──
-                                          run `docker stop <dockerId>`
-                                          (uses local Docker socket — never
-                                           exposed to the dashboard)
-                          ── result ──►
-  → mark job done, refresh container row
+UI polls GET /api/jobs/<jobId>  every 1s, up to 30s
+
+                                                GET /api/agent/jobs?hostname=…
+                                                ← claims pending jobs
+                                                  (status → "inflight")
+                                                execFile("docker", ["stop", dockerId])
+                                                POST /api/agent/jobs/<jobId>/result
+                                                   { status: "done"|"error", result }
+
+UI sees terminal status → refreshes table
 ```
 
-Key principles:
+Job types currently supported:
+
+| type | payload | result |
+|------|---------|--------|
+| `container.start` | `{ dockerId }` | `{ action, dockerId }` |
+| `container.stop` | `{ dockerId }` | `{ action, dockerId }` |
+| `container.restart` | `{ dockerId }` | `{ action, dockerId }` |
+| `container.logs` | `{ dockerId, tail }` | `{ lines: string[] }` |
+
+### Safety properties of this design
 
 - **The dashboard never touches the Docker socket directly.** Mounting
-  `/var/run/docker.sock` into the dashboard would give anyone who reaches
-  the dashboard root-equivalent control of the host. The agent is the only
-  thing that talks to Docker, and the agent only runs on the host it manages.
-- **Jobs are signed and scoped.** A job for `serverId=A` is only fulfilled by
-  the agent that owns hostname A. Replays beyond a short TTL are rejected.
-- **Allowed actions are an explicit allowlist** (`start`, `stop`, `restart`,
-  `logs:tail`). Free-form shell exec is *not* on the table.
+  `/var/run/docker.sock` into the dashboard would give anyone who reaches it
+  root-equivalent control of the host. Only the agent on each host talks to
+  Docker, and only via `docker` CLI with a fixed argv list (`execFile`, not
+  `exec`) — there is no shell interpolation path from the API into the host.
+- **Jobs are hostname-scoped.** When an agent posts a result it must include
+  its own hostname; the API rejects the result if the job belongs to a
+  different host (`/api/agent/jobs/[id]/result` returns 403).
+- **Action allowlist.** Only the four `container.*` types above are
+  understood. Anything else returns an error from the agent runner.
+- **Inflight jobs are reclaimable.** If an agent crashes mid-job, the
+  `inflight` row is reclaimed by the next poller after 60s — no stuck jobs.
+- **Duplicate enqueues collapse.** If a user spam-clicks "stop", we return
+  the existing pending/inflight job instead of queueing N copies.
+
+### Why no WebSocket / SSE
+
+Polling is plenty for ≤ a few dozen hosts and avoids long-lived connections
+that NAT'd / VPN'd networks sometimes drop. The poll interval is 3 seconds,
+so the user perceives ~3–5s end-to-end latency for an action — fine for a
+homelab.
 
 ## Safe development rules
 

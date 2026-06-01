@@ -31,6 +31,33 @@ model Server {
   metrics    Metric[]
   containers Container[]
   alerts     Alert[]
+  jobs       Job[]
+}
+
+// Job is a command the dashboard wants an agent to execute on a host. The
+// dashboard inserts a row with status="pending"; the agent for that host
+// claims it (status→"inflight") and later reports back (status→"done"|"error").
+// This is how the dashboard performs container actions without ever touching
+// Docker directly. See AGENTS.md → "Future Docker control flow".
+//
+// type values (one of):
+//   "container.start" | "container.stop" | "container.restart" | "container.logs"
+//
+// payload / result are JSON strings; consumers must JSON.parse.
+model Job {
+  id          String    @id @default(cuid())
+  serverId    String
+  type        String
+  payload     String    @default("{}")
+  status      String    @default("pending")
+  result      String?
+  createdAt   DateTime  @default(now())
+  claimedAt   DateTime?
+  completedAt DateTime?
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, status, createdAt])
 }
 
 model Metric {

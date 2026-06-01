@@ -7,6 +7,27 @@ import { cn } from "@/lib/utils";
 
 type Action = "start" | "stop" | "restart";
 
+const POLL_INTERVAL_MS = 1000;
+const POLL_TIMEOUT_MS = 30_000;
+
+/**
+ * Wait for a job to reach a terminal state. Polls /api/jobs/<id> until status
+ * is "done" or "error", or until the timeout fires. Returns the final job
+ * payload (with parsed `result`), or throws if the job never completes.
+ */
+async function waitForJob(jobId: string, signal?: AbortSignal) {
+  const started = Date.now();
+  while (Date.now() - started < POLL_TIMEOUT_MS) {
+    if (signal?.aborted) throw new Error("aborted");
+    const res = await fetch(`/api/jobs/${jobId}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`job poll -> ${res.status}`);
+    const job = await res.json();
+    if (job.status === "done" || job.status === "error") return job;
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+  }
+  throw new Error("job timed out (agent may be offline)");
+}
+
 export function ContainerActions({
   id,
   name,
@@ -18,19 +39,29 @@ export function ContainerActions({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<Action | "logs" | null>(null);
-  const [logs, setLogs] = useState<string[] | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [logs, setLogs] = useState<{ lines: string[]; error?: string } | null>(null);
+  const [, startTransition] = useTransition();
 
   const running = status.toLowerCase() === "running";
 
   async function call(action: Action) {
     setBusy(action);
+    setError(null);
     try {
       const res = await fetch(`/api/containers/${id}/${action}`, { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
+      const { jobId } = await res.json();
+      const job = await waitForJob(jobId);
+      if (job.status === "error") {
+        throw new Error(extractError(job.result));
+      }
+      // Successful action — refresh server-rendered list. The next agent tick
+      // will sync the real container status; until then the UI is briefly
+      // stale by up to 30s. That's acceptable for MVP.
       startTransition(() => router.refresh());
     } catch (e) {
-      console.error(`container ${action} failed`, e);
+      setError((e as Error).message);
     } finally {
       setBusy(null);
     }
@@ -38,12 +69,21 @@ export function ContainerActions({
 
   async function fetchLogs() {
     setBusy("logs");
+    setError(null);
+    setLogs(null);
     try {
-      const res = await fetch(`/api/containers/${id}/logs`);
-      const data = await res.json();
-      setLogs(data.lines ?? []);
+      const res = await fetch(`/api/containers/${id}/logs`, { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      const { jobId } = await res.json();
+      const job = await waitForJob(jobId);
+      if (job.status === "error") {
+        setLogs({ lines: [], error: extractError(job.result) });
+      } else {
+        const lines: string[] = Array.isArray(job.result?.lines) ? job.result.lines : [];
+        setLogs({ lines });
+      }
     } catch (e) {
-      console.error("logs failed", e);
+      setError((e as Error).message);
     } finally {
       setBusy(null);
     }
@@ -53,7 +93,7 @@ export function ContainerActions({
     <div className="flex items-center justify-end gap-1.5">
       <IconButton
         title={`Start ${name}`}
-        disabled={running || busy !== null || isPending}
+        disabled={running || busy !== null}
         loading={busy === "start"}
         onClick={() => call("start")}
       >
@@ -61,7 +101,7 @@ export function ContainerActions({
       </IconButton>
       <IconButton
         title={`Stop ${name}`}
-        disabled={!running || busy !== null || isPending}
+        disabled={!running || busy !== null}
         loading={busy === "stop"}
         onClick={() => call("stop")}
       >
@@ -69,7 +109,7 @@ export function ContainerActions({
       </IconButton>
       <IconButton
         title={`Restart ${name}`}
-        disabled={busy !== null || isPending}
+        disabled={busy !== null}
         loading={busy === "restart"}
         onClick={() => call("restart")}
       >
@@ -83,6 +123,12 @@ export function ContainerActions({
       >
         <ScrollText className="h-3.5 w-3.5" />
       </IconButton>
+
+      {error ? (
+        <span className="ml-2 max-w-[16rem] truncate text-xs text-destructive" title={error}>
+          {error}
+        </span>
+      ) : null}
 
       {logs ? (
         <div
@@ -104,14 +150,28 @@ export function ContainerActions({
                 close
               </button>
             </div>
-            <pre className="max-h-96 overflow-auto rounded bg-background p-3 text-left font-mono text-xs leading-relaxed">
-              {logs.length === 0 ? "(no output)" : logs.join("\n")}
-            </pre>
+            {logs.error ? (
+              <div className="rounded bg-destructive/10 p-3 text-xs text-destructive">
+                {logs.error}
+              </div>
+            ) : (
+              <pre className="max-h-96 overflow-auto rounded bg-background p-3 text-left font-mono text-xs leading-relaxed">
+                {logs.lines.length === 0 ? "(no output)" : logs.lines.join("\n")}
+              </pre>
+            )}
           </div>
         </div>
       ) : null}
     </div>
   );
+}
+
+function extractError(result: unknown): string {
+  if (result && typeof result === "object" && "error" in result) {
+    const e = (result as { error: unknown }).error;
+    if (typeof e === "string" && e.length > 0) return e;
+  }
+  return "agent reported an error";
 }
 
 function IconButton({
