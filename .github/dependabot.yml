@@ -39,6 +39,15 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: eslint-config-next
         update-types: ["version-update:semver-major"]
+      # prisma 6+: client API and migration tooling changed. Stay on 5
+      # until we audit the queries + redo the docker-compose db-push step.
+      - dependency-name: prisma
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/client"
+        update-types: ["version-update:semver-major"]
+      # typescript 6: see comment in the /agent block — same reasoning.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
   # Agent deps
   - package-ecosystem: npm
