@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, Cpu, HardDrive, MemoryStick } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
-import { ProgressBar } from "@/components/stat-card";
-import { Sparkline } from "@/components/sparkline";
-import { formatPercent, formatRelativeTime } from "@/lib/utils";
+import { ServerMetricsCharts } from "@/components/server-metrics-charts";
+import { formatRelativeTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +13,6 @@ async function getData(id: string) {
   const server = await prisma.server.findUnique({
     where: { id },
     include: {
-      metrics: { orderBy: { createdAt: "desc" }, take: 60 },
       containers: { orderBy: { name: "asc" } },
       alerts: {
         where: { resolved: false },
@@ -29,10 +27,6 @@ async function getData(id: string) {
 export default async function ServerDetailPage({ params }: { params: { id: string } }) {
   const server = await getData(params.id);
   if (!server) notFound();
-
-  // metrics come back newest-first; reverse for chart left-to-right
-  const series = [...server.metrics].reverse();
-  const latest = server.metrics[0];
 
   return (
     <>
@@ -51,26 +45,7 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
         actions={<StatusBadge status={server.status} />}
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <MetricPanel
-          label="CPU"
-          icon={Cpu}
-          value={latest?.cpuPercent}
-          values={series.map((m) => m.cpuPercent)}
-        />
-        <MetricPanel
-          label="Memory"
-          icon={MemoryStick}
-          value={latest?.memoryPercent}
-          values={series.map((m) => m.memoryPercent)}
-        />
-        <MetricPanel
-          label="Disk"
-          icon={HardDrive}
-          value={latest?.diskPercent}
-          values={series.map((m) => m.diskPercent)}
-        />
-      </div>
+      <ServerMetricsCharts serverId={server.id} />
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-border bg-card p-5">
@@ -125,38 +100,8 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
       </div>
 
       <p className="mt-4 text-xs text-muted-foreground">
-        Showing the most recent {series.length} samples · last seen {formatRelativeTime(server.lastSeenAt)}
+        Last seen {formatRelativeTime(server.lastSeenAt)}
       </p>
     </>
-  );
-}
-
-function MetricPanel({
-  label,
-  icon: Icon,
-  value,
-  values,
-}: {
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  value: number | undefined;
-  values: number[];
-}) {
-  const display = value == null ? "—" : formatPercent(value, 1);
-  const tone = value == null ? "primary" : value >= 90 ? "destructive" : value >= 75 ? "warning" : "success";
-  return (
-    <div className="rounded-xl border border-border bg-card p-5">
-      <div className="flex items-center justify-between">
-        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <div className="mt-2 flex items-end justify-between gap-3">
-        <div className="text-2xl font-semibold tabular-nums">{display}</div>
-        <Sparkline values={values} tone={tone} width={140} height={36} />
-      </div>
-      <div className="mt-3">
-        <ProgressBar value={value ?? 0} />
-      </div>
-    </div>
   );
 }

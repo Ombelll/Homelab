@@ -28,10 +28,11 @@ model Server {
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
-  metrics    Metric[]
-  containers Container[]
-  alerts     Alert[]
-  jobs       Job[]
+  metrics       Metric[]
+  metricsHourly MetricHourly[]
+  containers    Container[]
+  alerts        Alert[]
+  jobs          Job[]
 }
 
 // Job is a command the dashboard wants an agent to execute on a host. The
@@ -98,6 +99,28 @@ model Metric {
   server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
 
   @@index([serverId, createdAt])
+}
+
+// Hourly rollup of Metric rows so we can keep months of history without
+// querying millions of points. Written by /api/internal/downsample once
+// per completed hour, per server. The raw Metric table is then safe to
+// prune (default: 14 days, see /api/internal/retention).
+model MetricHourly {
+  id            String   @id @default(cuid())
+  serverId      String
+  hourStart     DateTime
+  cpuAvg        Float
+  cpuMax        Float
+  memoryAvg     Float
+  memoryMax     Float
+  diskAvg       Float
+  diskMax       Float
+  sampleCount   Int
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, hourStart])
+  @@index([serverId, hourStart])
 }
 
 model Container {
@@ -177,6 +200,29 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
+}
+
+// Outbound notification channel. `type` selects the formatter/transport in
+// src/lib/notifications.ts; `config` is a JSON string holding the
+// type-specific options (URL, topic, token, etc.). Secrets are stored as-is
+// — protect this DB the same way you'd protect /etc/secrets.
+//
+// type values:
+//   "discord"  config = { webhookUrl }
+//   "ntfy"     config = { server?, topic, token? }
+//   "webhook"  config = { url, headers? }
+model NotificationChannel {
+  id            String    @id @default(cuid())
+  name          String
+  type          String
+  config        String    @default("{}")
+  enabled       Boolean   @default(true)
+  // What severity levels trigger this channel: subset of "info,warning,critical".
+  minSeverity   String    @default("warning")
+  lastUsedAt    DateTime?
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 // AgentKey lets us rotate / scope agent credentials in the future. For MVP we

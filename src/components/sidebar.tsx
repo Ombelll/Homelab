@@ -97,7 +97,7 @@ export function Sidebar({
           )}
           Sign out
         </button>
-        <div className="text-[11px] text-muted-foreground">v0.3.0</div>
+        <div className="text-[11px] text-muted-foreground">v0.4.0</div>
       </div>
     </aside>
   );

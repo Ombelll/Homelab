@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/page-header";
 import { AgentKeysPanel } from "@/components/agent-keys-panel";
 import { InvitesPanel } from "@/components/invites-panel";
+import { NotificationsPanel } from "@/components/notifications-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,8 @@ export default function SettingsPage() {
             SQLite is the default. Swap the provider in <code>prisma/schema.prisma</code> for Postgres later.
           </p>
         </Card>
+
+        <NotificationsPanel />
 
         <AgentKeysPanel />
 

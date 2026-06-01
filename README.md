@@ -152,10 +152,19 @@ Two internal endpoints, both gated by `SWEEP_KEY` (open if unset):
 * * * * * curl -fsS -X POST http://dashboard/api/internal/sweep \
   -H "x-sweep-key: $SWEEP_KEY" > /dev/null
 
+# Downsample: roll raw metrics into hourly aggregates so long ranges stay fast.
+*/15 * * * * curl -fsS -X POST http://dashboard/api/internal/downsample \
+  -H "x-sweep-key: $SWEEP_KEY" > /dev/null
+
 # Retention: prune metrics, resolved alerts, and completed jobs older than N days.
 30 3 * * * curl -fsS -X POST "http://dashboard/api/internal/retention?days=30" \
   -H "x-sweep-key: $SWEEP_KEY" > /dev/null
 ```
+
+The downsample job must run before the retention job for any given hour
+(retention drops raw metrics that the rollup is supposed to read). The
+15-minute downsample + 3am retention schedule above gives a comfortable
+margin.
 
 The metric table grows ~1 row per server per agent tick. Without retention a
 30-second interval over 5 hosts produces ~430k rows/month — SQLite will
@@ -174,9 +183,10 @@ handle it, but a daily prune keeps queries snappy.
 - ✅ Live log streaming (SSE + chunked uploads from agent, with cancel).
 - ✅ Invite flow for additional users (Settings → Invite users).
 - ✅ Postgres support (`docker-compose.postgres.yml` + scripts).
-- Notification integrations (Discord / ntfy / email) when alerts open.
-- Downsampling for the metric table (compute hourly averages).
+- ✅ Notification integrations: Discord, ntfy, generic JSON webhook.
+- ✅ Downsampling for the metric table (hourly avg/max per server).
 - Per-user roles (read-only viewer vs. admin).
+- SMTP / email notification channel.
 
 ## Project layout
 

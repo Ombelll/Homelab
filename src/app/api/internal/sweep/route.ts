@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { OFFLINE_AFTER_MS } from "@/lib/staleness";
+import { notifyAlert } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
       const minutes = s.lastSeenAt
         ? Math.round((Date.now() - s.lastSeenAt.getTime()) / 60000)
         : null;
-      await prisma.alert.create({
+      const created = await prisma.alert.create({
         data: {
           serverId: s.id,
           type: "agent-missing",
@@ -58,6 +59,13 @@ export async function POST(request: Request) {
             ? `${s.name} has not checked in for ${minutes} minutes`
             : `${s.name} has never checked in`,
         },
+      });
+      void notifyAlert({
+        type: created.type,
+        severity: created.severity,
+        message: created.message,
+        serverName: s.name,
+        createdAt: created.createdAt,
       });
       opened++;
     } else if (!stale && existing) {

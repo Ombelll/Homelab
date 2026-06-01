@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { notifyAlert } from "@/lib/notifications";
 
 /**
  * Threshold-based alert engine.
@@ -88,7 +89,7 @@ async function reconcile(input: {
   )}% (threshold ${severity === "critical" ? critical : warning}%)`;
 
   if (!open) {
-    await prisma.alert.create({
+    const created = await prisma.alert.create({
       data: {
         serverId: input.serverId,
         type: input.type,
@@ -96,14 +97,30 @@ async function reconcile(input: {
         message,
       },
     });
+    // Fire notifications outside the create transaction so a slow webhook
+    // never delays the metrics ingest path.
+    void notifyAlert({
+      type: created.type,
+      severity: created.severity,
+      message: created.message,
+      serverName: input.serverName,
+      createdAt: created.createdAt,
+    });
     return;
   }
 
   // Upgrade severity in place if the situation has worsened.
   if (open.severity !== "critical" && severity === "critical") {
-    await prisma.alert.update({
+    const upgraded = await prisma.alert.update({
       where: { id: open.id },
       data: { severity, message },
+    });
+    void notifyAlert({
+      type: upgraded.type,
+      severity: upgraded.severity,
+      message: upgraded.message,
+      serverName: input.serverName,
+      createdAt: upgraded.createdAt,
     });
   }
 }
