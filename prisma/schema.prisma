@@ -1,0 +1,92 @@
+// Homelab Control Center — Prisma schema
+// SQLite is used for the MVP because it is zero-config and good enough for a
+// homelab dashboard. To migrate to Postgres later: change `provider` to
+// "postgresql" and re-run `prisma migrate dev`.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Server status is one of: "online" | "offline" | "warning" | "critical".
+// Alert severity is one of: "info" | "warning" | "critical".
+// Stored as plain strings because SQLite has no native enum type — values are
+// validated at the API layer via Zod schemas.
+
+model Server {
+  id         String    @id @default(cuid())
+  name       String
+  hostname   String    @unique
+  ipAddress  String?
+  os         String?
+  status     String    @default("offline")
+  lastSeenAt DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  metrics    Metric[]
+  containers Container[]
+  alerts     Alert[]
+}
+
+model Metric {
+  id            String   @id @default(cuid())
+  serverId     String
+  cpuPercent    Float
+  memoryPercent Float
+  diskPercent   Float
+  createdAt     DateTime @default(now())
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, createdAt])
+}
+
+model Container {
+  id        String   @id @default(cuid())
+  serverId  String
+  dockerId  String
+  name      String
+  image     String
+  status    String
+  // Stored as JSON string of an array like
+  //   [{ "host": "8080", "container": "80", "protocol": "tcp" }]
+  // SQLite has no native JSON type, so consumers must JSON.parse.
+  ports     String   @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, dockerId])
+  @@index([serverId])
+}
+
+model Alert {
+  id        String   @id @default(cuid())
+  serverId  String?
+  type      String
+  severity  String   @default("info")
+  message   String
+  resolved  Boolean       @default(false)
+  createdAt DateTime      @default(now())
+
+  server Server? @relation(fields: [serverId], references: [id], onDelete: SetNull)
+
+  @@index([resolved, createdAt])
+}
+
+// AgentKey lets us rotate / scope agent credentials in the future. For MVP we
+// also accept the env var AGENT_API_KEY as a fallback.
+model AgentKey {
+  id          String    @id @default(cuid())
+  label       String
+  keyHash     String    @unique
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+}

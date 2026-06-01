@@ -1,0 +1,30 @@
+# Homelab Control Center — local stack.
+# This compose file runs the dashboard only. Agents run on each host you want
+# to monitor; see /agent/README.md for that.
+
+services:
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: homelab-control-center:0.1.0
+    container_name: homelab-dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "file:/data/dev.db"
+      AGENT_API_KEY: "${AGENT_API_KEY:?set AGENT_API_KEY in your .env}"
+      NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:-http://localhost:3000}"
+      NODE_ENV: production
+    volumes:
+      # SQLite database lives in a named volume so it survives image rebuilds.
+      - homelab-data:/data
+
+    # SECURITY: we intentionally do NOT mount /var/run/docker.sock here.
+    # The dashboard must never have direct access to the host's Docker socket;
+    # that path runs as root and lets any caller take over the host. Container
+    # control is performed by the per-host agent via an authenticated channel.
+
+volumes:
+  homelab-data:
