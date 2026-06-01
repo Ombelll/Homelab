@@ -18,7 +18,13 @@ describe("parseResult", () => {
 describe("JOB_TYPES allowlist", () => {
   it("matches the documented action set", () => {
     expect([...JOB_TYPES].sort()).toEqual(
-      ["container.logs", "container.restart", "container.start", "container.stop"].sort(),
+      [
+        "container.logs",
+        "container.logs.stream",
+        "container.restart",
+        "container.start",
+        "container.stop",
+      ].sort(),
     );
   });
 });

@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { promisify } from "node:util";
 import { config } from "./config.js";
 
@@ -9,6 +9,10 @@ type Job = {
   type: string;
   payload: { dockerId?: string; containerName?: string; tail?: number };
 };
+
+// Track running stream processes so we don't spawn duplicates if the same
+// job appears twice (network retry, etc.).
+const activeStreams = new Map<string, ChildProcessWithoutNullStreams>();
 
 const POLL_INTERVAL_MS = 3000;
 let polling = false;
@@ -84,8 +88,96 @@ async function runJob(job: Job) {
       return;
     }
 
+    case "container.logs.stream": {
+      // Long-running. Spawn `docker logs -f`, stream stdout/stderr as chunks,
+      // stop when the server returns continue=false or the process exits.
+      if (activeStreams.has(job.id)) return;
+      const tail = clampTail(job.payload?.tail);
+      void streamLogs(job.id, dockerId, tail);
+      return;
+    }
+
     default:
       throw new Error(`unsupported job type: ${job.type}`);
+  }
+}
+
+async function streamLogs(jobId: string, dockerId: string, tail: number) {
+  const child = spawn(
+    "docker",
+    ["logs", "-f", "--tail", String(tail), dockerId],
+    { stdio: ["ignore", "pipe", "pipe"] },
+  ) as ChildProcessWithoutNullStreams;
+
+  activeStreams.set(jobId, child);
+
+  let seq = 0;
+  let buf = "";
+  let stopping = false;
+
+  const stop = (status: "done" | "error", note?: string) => {
+    if (stopping) return;
+    stopping = true;
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      /* already gone */
+    }
+    activeStreams.delete(jobId);
+    void reportResult(jobId, status, note ? { note } : {}).catch(() => {});
+  };
+
+  const onData = (data: Buffer) => {
+    buf += data.toString("utf8");
+    let idx;
+    const lines: string[] = [];
+    while ((idx = buf.indexOf("\n")) !== -1) {
+      lines.push(buf.slice(0, idx));
+      buf = buf.slice(idx + 1);
+    }
+    if (lines.length === 0) return;
+    void sendChunk(jobId, seq++, lines).then((cont) => {
+      if (!cont) stop("done", "cancelled by dashboard");
+    });
+  };
+
+  child.stdout.on("data", onData);
+  child.stderr.on("data", onData);
+  child.on("error", (err) => stop("error", err.message));
+  child.on("close", (code) => {
+    clearInterval(heartbeat);
+    if (buf.length > 0) {
+      void sendChunk(jobId, seq++, [buf]).catch(() => {});
+      buf = "";
+    }
+    stop(code === 0 || code === null ? "done" : "error", `process exited (${code})`);
+  });
+
+  // Heartbeat: poll for cancel even when the container is silent.
+  const heartbeat = setInterval(() => {
+    if (stopping) return;
+    void sendChunk(jobId, 0, []).then((cont) => {
+      if (!cont) stop("done", "cancelled by dashboard");
+    });
+  }, 5000);
+}
+
+async function sendChunk(jobId: string, seq: number, lines: string[]): Promise<boolean> {
+  try {
+    const url = `${config.dashboardUrl}/api/agent/jobs/${encodeURIComponent(jobId)}/chunk`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-agent-key": config.apiKey,
+      },
+      body: JSON.stringify({ hostname: config.hostname, seq, lines }),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json().catch(() => ({}))) as { continue?: boolean };
+    return data.continue !== false;
+  } catch {
+    return false;
   }
 }
 

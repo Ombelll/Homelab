@@ -7,6 +7,7 @@ import { SESSION_COOKIE } from "@/lib/session-constants";
 const PUBLIC_PREFIXES = [
   "/login",
   "/register",
+  "/invite",
   "/api/auth",
   "/api/agent",
   "/api/internal",

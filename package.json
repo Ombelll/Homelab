@@ -1,6 +1,6 @@
 {
   "name": "homelab-control-center",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Self-hosted dashboard for managing and monitoring homelab servers and Docker containers",
   "scripts": {
@@ -13,6 +13,10 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
+    "db:postgres:sync": "node scripts/gen-postgres-schema.mjs",
+    "db:postgres:generate": "npm run db:postgres:sync && prisma generate --schema=./prisma/schema.postgres.prisma",
+    "db:postgres:push": "npm run db:postgres:sync && prisma db push --schema=./prisma/schema.postgres.prisma",
+    "db:postgres:migrate": "npm run db:postgres:sync && prisma migrate dev --schema=./prisma/schema.postgres.prisma",
     "test": "vitest run",
     "test:watch": "vitest",
     "postinstall": "prisma generate"

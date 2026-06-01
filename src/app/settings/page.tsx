@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/page-header";
 import { AgentKeysPanel } from "@/components/agent-keys-panel";
+import { InvitesPanel } from "@/components/invites-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,8 @@ export default function SettingsPage() {
         </Card>
 
         <AgentKeysPanel />
+
+        <InvitesPanel />
 
         <Card title="Hardening checklist">
           <ul className="ml-4 list-disc space-y-1 text-sm text-muted-foreground">

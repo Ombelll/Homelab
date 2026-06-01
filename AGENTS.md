@@ -112,6 +112,37 @@ Job types currently supported:
 | `container.stop` | `{ dockerId }` | `{ action, dockerId }` |
 | `container.restart` | `{ dockerId }` | `{ action, dockerId }` |
 | `container.logs` | `{ dockerId, tail }` | `{ lines: string[] }` |
+| `container.logs.stream` | `{ dockerId, tail }` | chunks via separate endpoint (see below) |
+
+### Streaming logs
+
+`container.logs.stream` is long-running. Instead of a single result, the
+agent spawns `docker logs -f` and POSTs output to a separate chunk endpoint:
+
+```
+agent                                              dashboard
+─────                                              ─────────
+spawn docker logs -f --tail N <dockerId>
+on stdout/stderr → batch lines → POST /api/agent/jobs/<id>/chunk
+                       { hostname, seq, lines }
+                                                   ← { continue: true | false }
+if continue=false → SIGTERM the docker process
+                                                   ← (also returns false when
+                                                      job.status == "cancel" or
+                                                      != "inflight")
+every 5s send empty chunk as a heartbeat so an idle stream still learns about cancel.
+
+POST /api/agent/jobs/<id>/result on close
+                       { status: "done"|"error", result }
+```
+
+On the dashboard side, the browser opens an `EventSource` against
+`GET /api/jobs/<id>/stream` (SSE). When the user closes the viewer, the SSE
+request aborts and the handler flips the job to `cancel` — picked up by the
+agent on the next chunk post.
+
+Empty `lines: []` payloads are treated as heartbeats and never written to
+`LogChunk`, so an idle container doesn't bloat the DB.
 
 ### Safety properties of this design
 

@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Play, Square, RotateCw, ScrollText, Loader2 } from "lucide-react";
+import { Play, Square, RotateCw, ScrollText, Loader2, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LogStreamViewer } from "@/components/log-stream-viewer";
 
 type Action = "start" | "stop" | "restart";
 
@@ -38,9 +39,10 @@ export function ContainerActions({
   status: string;
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState<Action | "logs" | null>(null);
+  const [busy, setBusy] = useState<Action | "logs" | "stream" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<{ lines: string[]; error?: string } | null>(null);
+  const [streamJobId, setStreamJobId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   const running = status.toLowerCase() === "running";
@@ -60,6 +62,21 @@ export function ContainerActions({
       // will sync the real container status; until then the UI is briefly
       // stale by up to 30s. That's acceptable for MVP.
       startTransition(() => router.refresh());
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function startStream() {
+    setBusy("stream");
+    setError(null);
+    try {
+      const res = await fetch(`/api/containers/${id}/logs/stream`, { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      const { jobId } = await res.json();
+      setStreamJobId(jobId);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -123,6 +140,22 @@ export function ContainerActions({
       >
         <ScrollText className="h-3.5 w-3.5" />
       </IconButton>
+      <IconButton
+        title={`Live logs for ${name}`}
+        disabled={!running || busy !== null}
+        loading={busy === "stream"}
+        onClick={startStream}
+      >
+        <Radio className="h-3.5 w-3.5" />
+      </IconButton>
+
+      {streamJobId ? (
+        <LogStreamViewer
+          jobId={streamJobId}
+          containerName={name}
+          onClose={() => setStreamJobId(null)}
+        />
+      ) : null}
 
       {error ? (
         <span className="ml-2 max-w-[16rem] truncate text-xs text-destructive" title={error}>

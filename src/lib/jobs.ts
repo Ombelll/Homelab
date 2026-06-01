@@ -7,6 +7,7 @@ export const JOB_TYPES = [
   "container.stop",
   "container.restart",
   "container.logs",
+  "container.logs.stream",
 ] as const;
 export type JobType = (typeof JOB_TYPES)[number];
 

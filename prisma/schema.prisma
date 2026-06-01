@@ -44,6 +44,16 @@ model Server {
 //   "container.start" | "container.stop" | "container.restart" | "container.logs"
 //
 // payload / result are JSON strings; consumers must JSON.parse.
+// Job statuses:
+//   pending   — enqueued, no agent claimed it yet
+//   inflight  — claimed and being executed
+//   done      — agent reported success
+//   error     — agent reported failure
+//   cancel    — dashboard asked the agent to stop (long-running streams only)
+//
+// `cancel` is a control-plane signal: when the agent next tries to post a
+// chunk we return continue=false and it tears down the process. Once the
+// agent acknowledges, it sets the final status to "done".
 model Job {
   id          String    @id @default(cuid())
   serverId    String
@@ -56,8 +66,25 @@ model Job {
   completedAt DateTime?
 
   server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  chunks LogChunk[]
 
   @@index([serverId, status, createdAt])
+}
+
+// Buffered output from a streaming job (currently only container.logs.stream).
+// The SSE endpoint reads new rows by `seq` and forwards them to the browser.
+// Retention sweep prunes these along with their parent jobs.
+model LogChunk {
+  id        String   @id @default(cuid())
+  jobId     String
+  seq       Int
+  lines     String   // JSON string array
+  createdAt DateTime @default(now())
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, seq])
+  @@index([jobId, seq])
 }
 
 model Metric {
@@ -117,7 +144,25 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  sessions Session[]
+  sessions       Session[]
+  invitesCreated Invite[]
+}
+
+// Single-use invite tokens. The plaintext token is shown to the inviting
+// admin exactly once; only the SHA-256 hash is persisted. Accepting the
+// invite marks `usedAt`; expired or used tokens are rejected.
+model Invite {
+  id             String    @id @default(cuid())
+  tokenHash      String    @unique
+  emailHint      String?
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdByUserId String?
+  createdAt      DateTime  @default(now())
+
+  createdBy User? @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([expiresAt])
 }
 
 // Server-side sessions. The raw token lives only in the user's cookie; we

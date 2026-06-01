@@ -89,14 +89,34 @@ Docker is installed) every 30 seconds.
 
 ### Run with Docker Compose
 
+**SQLite (default):**
+
 ```bash
 cp .env.example .env
 # set AGENT_API_KEY
 docker compose up -d --build
 ```
 
-The SQLite database is persisted in the `homelab-data` named volume. To start
-fresh, `docker compose down -v`.
+The database file lives in the `homelab-data` named volume. To start fresh,
+`docker compose down -v`.
+
+**Postgres:**
+
+```bash
+cp .env.example .env
+# set AGENT_API_KEY and POSTGRES_PASSWORD; set DATABASE_URL to a postgres URL
+docker compose -f docker-compose.postgres.yml up -d --build
+```
+
+This brings up a `postgres:16-alpine` sidecar and a Postgres-flavoured
+dashboard image. The schema is generated at build time from the SQLite
+source-of-truth (`prisma/schema.prisma`) by swapping the provider — see
+`scripts/gen-postgres-schema.mjs`. For local development against Postgres:
+
+```bash
+npm run db:postgres:push   # syncs schema.postgres.prisma + pushes
+npm run db:postgres:generate
+```
 
 ## Environment variables
 
@@ -151,10 +171,12 @@ handle it, but a daily prune keeps queries snappy.
 - ✅ Offline detection sweep.
 - ✅ Multi-user auth (scrypt + signed session cookie; bootstrap-only register).
 - ✅ Retention sweep for metrics, resolved alerts, completed jobs.
-- Live log streaming (right now logs are a one-shot tail).
-- Invite flow for additional users beyond the bootstrap admin.
-- Postgres support (Prisma provider swap + migration).
+- ✅ Live log streaming (SSE + chunked uploads from agent, with cancel).
+- ✅ Invite flow for additional users (Settings → Invite users).
+- ✅ Postgres support (`docker-compose.postgres.yml` + scripts).
+- Notification integrations (Discord / ntfy / email) when alerts open.
 - Downsampling for the metric table (compute hourly averages).
+- Per-user roles (read-only viewer vs. admin).
 
 ## Project layout
 

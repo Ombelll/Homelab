@@ -1,0 +1,51 @@
+# Alternative compose stack: dashboard + Postgres.
+# Use instead of (not alongside) docker-compose.yml:
+#
+#   cp .env.example .env
+#   # set AGENT_API_KEY, set POSTGRES_PASSWORD
+#   docker compose -f docker-compose.postgres.yml up -d --build
+#
+# The dashboard image used here generates the Postgres-flavoured Prisma
+# client and pushes the schema on boot. SQLite-only flows (db:push, db:seed)
+# still work locally for development.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: homelab-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: homelab
+      POSTGRES_USER: homelab
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in your .env}"
+    volumes:
+      - homelab-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U homelab -d homelab"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    image: homelab-control-center:0.3.0-postgres
+    container_name: homelab-dashboard
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "postgresql://homelab:${POSTGRES_PASSWORD}@postgres:5432/homelab?schema=public"
+      AGENT_API_KEY: "${AGENT_API_KEY:?set AGENT_API_KEY in your .env}"
+      NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:-http://localhost:3000}"
+      SWEEP_KEY: "${SWEEP_KEY:-}"
+      NODE_ENV: production
+    # SECURITY: as in docker-compose.yml, /var/run/docker.sock is NOT mounted.
+    # Container actions flow through the per-host agent.
+
+volumes:
+  homelab-pg:
