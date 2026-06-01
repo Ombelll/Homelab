@@ -28,14 +28,19 @@ export async function createInvite(input: {
   return { ...record, token };
 }
 
-export async function consumeInvite(rawToken: string) {
+type InviteRecord = NonNullable<Awaited<ReturnType<typeof prisma.invite.findUnique>>>;
+export type ConsumeResult =
+  | { ok: true; invite: InviteRecord }
+  | { ok: false; reason: "unknown" | "used" | "expired" };
+
+export async function consumeInvite(rawToken: string): Promise<ConsumeResult> {
   const invite = await prisma.invite.findUnique({
     where: { tokenHash: hashInviteToken(rawToken) },
   });
-  if (!invite) return { ok: false, reason: "unknown" as const };
-  if (invite.usedAt) return { ok: false, reason: "used" as const };
-  if (invite.expiresAt < new Date()) return { ok: false, reason: "expired" as const };
-  return { ok: true as const, invite };
+  if (!invite) return { ok: false, reason: "unknown" };
+  if (invite.usedAt) return { ok: false, reason: "used" };
+  if (invite.expiresAt < new Date()) return { ok: false, reason: "expired" };
+  return { ok: true, invite };
 }
 
 export async function markInviteUsed(id: string) {

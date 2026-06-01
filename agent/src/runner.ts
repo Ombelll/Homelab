@@ -1,6 +1,10 @@
-import { execFile, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { execFile, spawn, type ChildProcessByStdio } from "node:child_process";
+import type { Readable } from "node:stream";
 import { promisify } from "node:util";
 import { config } from "./config.js";
+
+// stdin=ignore (we never write to docker), stdout/stderr=pipe (we read both).
+type StreamProc = ChildProcessByStdio<null, Readable, Readable>;
 
 const execFileAsync = promisify(execFile);
 
@@ -12,7 +16,7 @@ type Job = {
 
 // Track running stream processes so we don't spawn duplicates if the same
 // job appears twice (network retry, etc.).
-const activeStreams = new Map<string, ChildProcessWithoutNullStreams>();
+const activeStreams = new Map<string, StreamProc>();
 
 const POLL_INTERVAL_MS = 3000;
 let polling = false;
@@ -103,11 +107,11 @@ async function runJob(job: Job) {
 }
 
 async function streamLogs(jobId: string, dockerId: string, tail: number) {
-  const child = spawn(
+  const child: StreamProc = spawn(
     "docker",
     ["logs", "-f", "--tail", String(tail), dockerId],
     { stdio: ["ignore", "pipe", "pipe"] },
-  ) as ChildProcessWithoutNullStreams;
+  );
 
   activeStreams.set(jobId, child);
 
