@@ -15,6 +15,30 @@ updates:
       # get review.
       minor-and-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # Specific majors that need code changes alongside the bump. Bumping
+      # any of these without addressing the breaking change will land a
+      # red CI PR. Reopen when you're ready to do the migration.
+      #
+      # tailwindcss 4: config format changed (darkMode strategy + plugin
+      # API). Ours is plain v3 syntax in tailwind.config.ts.
+      - dependency-name: tailwindcss
+        update-types: ["version-update:semver-major"]
+      # tailwind-merge 3: requires tailwindcss 4.
+      - dependency-name: tailwind-merge
+        update-types: ["version-update:semver-major"]
+      # zod 4: API renames (e.g. z.string().email() → z.email(),
+      # error.errors → error.issues). Affects validation.ts + notifications.ts.
+      - dependency-name: zod
+        update-types: ["version-update:semver-major"]
+      # next 15: separate migration; defer.
+      - dependency-name: next
+        update-types: ["version-update:semver-major"]
+      # eslint 9: flat config required.
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: eslint-config-next
+        update-types: ["version-update:semver-major"]
 
   # Agent deps
   - package-ecosystem: npm
@@ -29,6 +53,11 @@ updates:
     groups:
       minor-and-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # TypeScript 6: agent uses module: ES2022 + moduleResolution: bundler;
+      # TS 6 changes default lib + skipLibCheck handling. Defer.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions versions in the CI workflow
   - package-ecosystem: github-actions
