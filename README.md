@@ -186,9 +186,13 @@ handle it, but a daily prune keeps queries snappy.
 - ✅ Notification integrations: Discord, ntfy, generic JSON webhook, SMTP/email.
 - ✅ Downsampling for the metric table (hourly avg/max per server).
 - ✅ Per-user roles (admin vs. viewer, enforced server-side and in the UI).
+- ✅ Mobile navigation (hamburger + slide-over drawer).
+- ✅ Self-serve password change (with optional sign-out of other devices).
+- ✅ Session + Invite retention as part of the retention sweep.
 - Backup / restore tooling (export + import of the DB).
 - Audit log of admin actions (settings changes, container actions).
 - More granular agent permissions (per-host vs global keys).
+- Alert acknowledgment / snooze.
 
 ## Project layout
 

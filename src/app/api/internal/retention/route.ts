@@ -7,12 +7,18 @@ const DEFAULT_DAYS = 14;
 const MAX_DAYS = 365;
 
 /**
- * Prune old data so the SQLite file doesn't grow forever.
+ * Prune old data so the DB doesn't grow forever.
  *
- * Currently removes:
- *   - Metric rows older than ?days (default 14)
- *   - Resolved Alert rows older than ?days
- *   - Done/error Job rows older than ?days
+ * Time-windowed (controlled by ?days, default 14):
+ *   - Metric rows
+ *   - Resolved Alert rows
+ *   - Done/error Job rows (LogChunks cascade with their parent Job)
+ *   - Used or expired Invite rows
+ *
+ * Always pruned regardless of `days`:
+ *   - Expired Session rows — once a session has passed its expiresAt it's
+ *     not usable, and lazy cleanup only fires when the user tries to use
+ *     the cookie. Pruning here keeps the table from growing unbounded.
  *
  * Call from cron:
  *   30 3 * * *  curl -fsS -X POST http://dashboard/api/internal/retention?days=30 \
@@ -35,15 +41,27 @@ export async function POST(request: Request) {
     ? Math.min(MAX_DAYS, requested)
     : DEFAULT_DAYS;
 
-  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-  const [metrics, alerts, jobs] = await prisma.$transaction([
+  const [metrics, alerts, jobs, sessions, invites] = await prisma.$transaction([
     prisma.metric.deleteMany({ where: { createdAt: { lt: cutoff } } }),
     prisma.alert.deleteMany({
       where: { resolved: true, createdAt: { lt: cutoff } },
     }),
     prisma.job.deleteMany({
       where: { status: { in: ["done", "error"] }, completedAt: { lt: cutoff } },
+    }),
+    // Expired sessions: always purgeable, no need to wait `days`.
+    prisma.session.deleteMany({ where: { expiresAt: { lt: now } } }),
+    // Invites that have either been consumed OR are past their expiry, and
+    // whose creation is older than `days` ago — keeps a short window of
+    // history for audit without growing forever.
+    prisma.invite.deleteMany({
+      where: {
+        createdAt: { lt: cutoff },
+        OR: [{ usedAt: { not: null } }, { expiresAt: { lt: now } }],
+      },
     }),
   ]);
 
@@ -54,6 +72,8 @@ export async function POST(request: Request) {
       metrics: metrics.count,
       alerts: alerts.count,
       jobs: jobs.count,
+      sessions: sessions.count,
+      invites: invites.count,
     },
   });
 }
