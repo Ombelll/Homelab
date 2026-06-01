@@ -1,12 +1,16 @@
 # Homelab Control Center
 
+[![CI](https://github.com/Ombelll/Homelab/actions/workflows/ci.yml/badge.svg)](https://github.com/Ombelll/Homelab/actions/workflows/ci.yml)
+
 A clean, self-hostable web dashboard for monitoring and managing the servers
 and Docker containers in your homelab. Built with Next.js (App Router),
 TypeScript, Tailwind, Prisma + SQLite, and a lightweight Node.js agent.
 
-> Status: **v1.0**. Auth (incl. RBAC), real container control via a per-host
-> agent, live log streaming, threshold alerts with Discord/ntfy/webhook/SMTP
-> notifications, metric downsampling, invite flow, SQLite or Postgres.
+> Status: **v1.3**. Auth + RBAC, real container control via a per-host
+> agent, live log streaming, sustained-threshold alerts with Discord / ntfy
+> / webhook / SMTP notifications, metric downsampling, invite flow, health
+> checks, Wake-on-LAN, image update detection, backup/restore, audit log,
+> SQLite or Postgres.
 
 ## Features
 
@@ -52,8 +56,8 @@ dashboard never gets direct Docker socket access.
 ## Quick start
 
 ```bash
-# 1. install dependencies
-npm install
+# 1. install dependencies (lockfile is committed, npm ci works)
+npm ci
 
 # 2. configure env
 cp .env.example .env
@@ -69,8 +73,20 @@ npm run dev
 ```
 
 On first visit you'll be redirected to `/register` to create the admin
-account. Subsequent visits prompt for sign-in. There is no public sign-up —
-additional users must be invited (UI for that is on the roadmap).
+account. Subsequent users are invited from Settings → Invite users.
+
+### Local development shortcut
+
+To skip the register dance every time you nuke the DB, opt-in to a dev
+admin user in the seed:
+
+```bash
+SEED_DEV_USER=1 SEED_DEV_PASSWORD=changeme npm run db:seed
+# now log in with admin@local / changeme
+```
+
+This is off by default so production seeds never ship with a known
+credential.
 
 ### Run the agent (on the host you want to monitor)
 
@@ -117,6 +133,18 @@ source-of-truth (`prisma/schema.prisma`) by swapping the provider — see
 npm run db:postgres:push   # syncs schema.postgres.prisma + pushes
 npm run db:postgres:generate
 ```
+
+## Tests
+
+Two suites — fast pure-function tests and slower integration tests that hit
+a real (temp) SQLite via Prisma.
+
+```bash
+npm test                  # unit + pure-function tests (~5s)
+npm run test:integration  # spins a temp DB, exercises alerts + jobs + auth (~10s)
+```
+
+Both run on every push via GitHub Actions; the badge above tracks main.
 
 ## Environment variables
 

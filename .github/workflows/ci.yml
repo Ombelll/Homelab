@@ -33,8 +33,11 @@ jobs:
       - name: Lint
         run: npm run lint -- --max-warnings=0
 
-      - name: Test
+      - name: Test (unit)
         run: npm test
+
+      - name: Test (integration)
+        run: npm run test:integration
 
       - name: Build
         run: npm run build

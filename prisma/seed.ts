@@ -1,9 +1,48 @@
 import { PrismaClient } from "@prisma/client";
+import { randomBytes, scrypt } from "node:crypto";
 
 const prisma = new PrismaClient();
 
+// Mirrors src/lib/password.ts (same N + maxmem) but inlined so the seed
+// script doesn't need to import from src/, which would drag the @/* path
+// alias through.
+const N = 1 << 15;
+const MAXMEM = 64 * 1024 * 1024;
+
+function hashPasswordForSeed(plaintext: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const salt = randomBytes(16);
+    scrypt(plaintext, salt, 64, { N, maxmem: MAXMEM }, (err, derivedKey) => {
+      if (err) reject(err);
+      else resolve(`s1$${salt.toString("hex")}$${derivedKey.toString("hex")}`);
+    });
+  });
+}
+
 async function main() {
   console.log("Seeding demo data…");
+
+  // Opt-in dev user. Off by default so production seeds don't ship with a
+  // known-credential admin account. Run with:
+  //   SEED_DEV_USER=1 SEED_DEV_PASSWORD=changeme npm run db:seed
+  if (process.env.SEED_DEV_USER === "1") {
+    const email = (process.env.SEED_DEV_EMAIL ?? "admin@local").toLowerCase();
+    const password = process.env.SEED_DEV_PASSWORD ?? "homelab-dev";
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      console.log(`Dev user ${email} already exists — leaving as-is.`);
+    } else {
+      await prisma.user.create({
+        data: {
+          email,
+          name: "Dev Admin",
+          passwordHash: await hashPasswordForSeed(password),
+          role: "admin",
+        },
+      });
+      console.log(`Dev user created: ${email} / ${password}`);
+    }
+  }
 
   const alpha = await prisma.server.upsert({
     where: { hostname: "alpha.lan" },
