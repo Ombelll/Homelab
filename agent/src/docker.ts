@@ -9,26 +9,45 @@ export type DockerContainer = {
   image: string;
   status: string;
   ports: Array<{ host?: string; container: string; protocol?: string }>;
+  composeProject?: string;
+  composeService?: string;
+  // Per-container stats. Optional because `docker stats` can fail or be
+  // unsupported on some platforms; we ship what we have.
+  cpuPercent?: number;
+  memoryBytes?: number;
+  memoryLimitBytes?: number;
 };
 
 export async function listDockerContainers(): Promise<DockerContainer[] | null> {
-  // Detect Docker once per call. If it's not on PATH, callers treat the host
-  // as a non-Docker box and skip the container sync gracefully.
   if (!(await hasDocker())) return null;
 
   try {
-    // --format outputs one JSON object per line for stable parsing across versions.
     const { stdout } = await execAsync(
       'docker ps -a --no-trunc --format "{{json .}}"',
       { maxBuffer: 4 * 1024 * 1024 },
     );
 
-    return stdout
+    const base = stdout
       .split("\n")
       .map((line) => line.trim())
       .filter(Boolean)
       .map(parseDockerLine)
       .filter((c): c is DockerContainer => c !== null);
+
+    // Decorate with stats (best-effort). `docker stats --no-stream` returns
+    // one row per running container, with --format json one per line.
+    const stats = await readStats().catch(() => new Map<string, ContainerStats>());
+
+    for (const c of base) {
+      const s = stats.get(c.dockerId) ?? stats.get(c.name);
+      if (s) {
+        c.cpuPercent = s.cpuPercent;
+        c.memoryBytes = s.memoryBytes;
+        c.memoryLimitBytes = s.memoryLimitBytes;
+      }
+    }
+
+    return base;
   } catch (err) {
     console.warn("[agent] docker ps failed:", (err as Error).message);
     return null;
@@ -47,12 +66,15 @@ async function hasDocker(): Promise<boolean> {
 function parseDockerLine(line: string): DockerContainer | null {
   try {
     const row = JSON.parse(line) as Record<string, string>;
+    const { project, service } = parseLabels(row.Labels ?? "");
     return {
       dockerId: row.ID ?? row.Id ?? "",
       name: row.Names ?? row.Name ?? "",
       image: row.Image ?? "",
       status: normalizeStatus(row.State ?? row.Status ?? "unknown"),
       ports: parsePorts(row.Ports ?? ""),
+      composeProject: project,
+      composeService: service,
     };
   } catch {
     return null;
@@ -70,12 +92,6 @@ export function normalizeStatus(raw: string): string {
   return s || "unknown";
 }
 
-/**
- * `docker ps` formats ports as a comma-separated list like:
- *   "0.0.0.0:8080->80/tcp, :::8080->80/tcp, 5432/tcp"
- * We parse out (host?, container, protocol) — duplicates across IPv4/IPv6 are
- * collapsed by stringifying.
- */
 export function parsePorts(raw: string): DockerContainer["ports"] {
   if (!raw) return [];
   const seen = new Set<string>();
@@ -90,4 +106,94 @@ export function parsePorts(raw: string): DockerContainer["ports"] {
     out.push(entry);
   }
   return out;
+}
+
+/**
+ * `docker ps --format` writes labels as a comma-separated `k=v,k=v` string.
+ * We only care about the two standard compose labels.
+ */
+export function parseLabels(raw: string): { project?: string; service?: string } {
+  const out: { project?: string; service?: string } = {};
+  if (!raw) return out;
+  for (const pair of raw.split(",")) {
+    const eq = pair.indexOf("=");
+    if (eq < 0) continue;
+    const key = pair.slice(0, eq).trim();
+    const val = pair.slice(eq + 1).trim();
+    if (key === "com.docker.compose.project") out.project = val;
+    else if (key === "com.docker.compose.service") out.service = val;
+  }
+  return out;
+}
+
+type ContainerStats = {
+  cpuPercent: number;
+  memoryBytes: number;
+  memoryLimitBytes: number;
+};
+
+async function readStats(): Promise<Map<string, ContainerStats>> {
+  const { stdout } = await execAsync(
+    'docker stats --no-stream --format "{{json .}}"',
+    { maxBuffer: 4 * 1024 * 1024 },
+  );
+  const map = new Map<string, ContainerStats>();
+  for (const line of stdout.split("\n").map((l) => l.trim()).filter(Boolean)) {
+    try {
+      const row = JSON.parse(line) as Record<string, string>;
+      const cpu = parsePercent(row.CPUPerc);
+      const mem = parseMemUsage(row.MemUsage);
+      if (cpu == null || !mem) continue;
+      const id = (row.ID ?? row.Id ?? "").trim();
+      const name = (row.Name ?? "").trim();
+      const stats: ContainerStats = {
+        cpuPercent: cpu,
+        memoryBytes: mem.used,
+        memoryLimitBytes: mem.limit,
+      };
+      if (id) map.set(id, stats);
+      if (name) map.set(name, stats);
+    } catch {
+      /* skip malformed row */
+    }
+  }
+  return map;
+}
+
+function parsePercent(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const n = Number.parseFloat(raw.replace("%", ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+// "123MiB / 4GiB" → { used: 128974848, limit: 4294967296 }
+function parseMemUsage(raw: string | undefined): { used: number; limit: number } | null {
+  if (!raw) return null;
+  const [left, right] = raw.split("/").map((s) => s.trim());
+  if (!left || !right) return null;
+  const used = parseSize(left);
+  const limit = parseSize(right);
+  if (used == null || limit == null) return null;
+  return { used, limit };
+}
+
+const UNITS: Record<string, number> = {
+  B: 1,
+  KIB: 1024,
+  KB: 1000,
+  MIB: 1024 ** 2,
+  MB: 1000 ** 2,
+  GIB: 1024 ** 3,
+  GB: 1000 ** 3,
+  TIB: 1024 ** 4,
+  TB: 1000 ** 4,
+};
+
+function parseSize(raw: string): number | null {
+  const m = /^([\d.]+)\s*([KMGTP]?i?B)$/i.exec(raw.trim());
+  if (!m) return null;
+  const num = Number.parseFloat(m[1]);
+  const unit = UNITS[m[2].toUpperCase()];
+  if (!Number.isFinite(num) || !unit) return null;
+  return num * unit;
 }

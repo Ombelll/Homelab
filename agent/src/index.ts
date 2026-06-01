@@ -8,6 +8,8 @@ import {
   getOsDescription,
 } from "./collector.js";
 import { listDockerContainers } from "./docker.js";
+import { getDisks } from "./disks.js";
+import { getSensors } from "./sensors.js";
 import { startJobRunner } from "./runner.js";
 
 let dockerWarned = false;
@@ -23,10 +25,12 @@ async function checkin() {
 }
 
 async function tick() {
-  const [cpu, disk, containers] = await Promise.all([
+  const [cpu, disk, containers, disks, sensors] = await Promise.all([
     getCpuPercent(),
     getDiskPercent(),
     listDockerContainers(),
+    getDisks(),
+    getSensors(),
   ]);
   const mem = getMemoryPercent();
 
@@ -42,6 +46,13 @@ async function tick() {
   } else if (!dockerWarned) {
     console.log("[agent] docker not detected on this host — skipping container sync");
     dockerWarned = true;
+  }
+
+  if (disks.length > 0) {
+    await api.disks({ hostname: config.hostname, disks });
+  }
+  if (sensors.length > 0) {
+    await api.sensors({ hostname: config.hostname, sensors });
   }
 }
 

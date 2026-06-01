@@ -159,6 +159,10 @@ Two internal endpoints, both gated by `SWEEP_KEY` (open if unset):
 # Retention: prune metrics, resolved alerts, and completed jobs older than N days.
 30 3 * * * curl -fsS -X POST "http://dashboard/api/internal/retention?days=30" \
   -H "x-sweep-key: $SWEEP_KEY" > /dev/null
+
+# Health checks: probe every enabled service whose interval has elapsed.
+* * * * *  curl -fsS -X POST http://dashboard/api/internal/run-health-checks \
+  -H "x-sweep-key: $SWEEP_KEY" > /dev/null
 ```
 
 The downsample job must run before the retention job for any given hour
@@ -189,10 +193,16 @@ handle it, but a daily prune keeps queries snappy.
 - ✅ Mobile navigation (hamburger + slide-over drawer).
 - ✅ Self-serve password change (with optional sign-out of other devices).
 - ✅ Session + Invite retention as part of the retention sweep.
+- ✅ Service-level health checks (HTTP / TCP / ping) with alerts on N-down.
+- ✅ docker-compose stack grouping in the containers list.
+- ✅ Per-container CPU & memory from `docker stats`.
+- ✅ Per-disk usage + Linux hwmon sensor readings on the server detail.
+- ✅ Alert ack / snooze / manual resolve, with sustained-N-samples
+     openings and maintenance windows.
 - Backup / restore tooling (export + import of the DB).
 - Audit log of admin actions (settings changes, container actions).
 - More granular agent permissions (per-host vs global keys).
-- Alert acknowledgment / snooze.
+- Wake-on-LAN button + container image update notifications.
 
 ## Project layout
 

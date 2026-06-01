@@ -28,11 +28,14 @@ model Server {
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
-  metrics       Metric[]
-  metricsHourly MetricHourly[]
-  containers    Container[]
-  alerts        Alert[]
-  jobs          Job[]
+  metrics            Metric[]
+  metricsHourly      MetricHourly[]
+  containers         Container[]
+  alerts             Alert[]
+  jobs               Job[]
+  disks              Disk[]
+  sensors            Sensor[]
+  maintenanceWindows MaintenanceWindow[]
 }
 
 // Job is a command the dashboard wants an agent to execute on a host. The
@@ -134,6 +137,18 @@ model Container {
   //   [{ "host": "8080", "container": "80", "protocol": "tcp" }]
   // SQLite has no native JSON type, so consumers must JSON.parse.
   ports     String   @default("[]")
+
+  // Compose grouping (from the standard docker-compose labels). NULL when
+  // the container was started outside of compose.
+  composeProject String?
+  composeService String?
+
+  // Last-known per-container resource usage from `docker stats`.
+  cpuPercent       Float?
+  memoryBytes      Float?
+  memoryLimitBytes Float?
+  statsAt          DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -141,6 +156,79 @@ model Container {
 
   @@unique([serverId, dockerId])
   @@index([serverId])
+  @@index([serverId, composeProject])
+}
+
+// Per-filesystem usage from the agent. The agent enumerates non-pseudo
+// mountpoints on each tick and upserts here. Removed when the agent stops
+// reporting them (handled by a diff in the API).
+model Disk {
+  id         String   @id @default(cuid())
+  serverId   String
+  mountpoint String
+  fstype     String?
+  totalBytes Float
+  usedBytes  Float
+  updatedAt  DateTime @updatedAt
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, mountpoint])
+  @@index([serverId])
+}
+
+// Generic numeric readings from the host (temperatures, fan RPM, power
+// draw). Agents that can't read sensors simply don't send any rows.
+model Sensor {
+  id        String   @id @default(cuid())
+  serverId  String
+  name      String
+  kind      String   // "temperature" | "fan" | "power" | other
+  value     Float
+  unit      String
+  updatedAt DateTime @updatedAt
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, name])
+  @@index([serverId])
+}
+
+// Suppress alert creation + notifications for a window of time. serverId=NULL
+// means a global maintenance (e.g. dashboard upgrade); otherwise scoped to
+// one host.
+model MaintenanceWindow {
+  id        String   @id @default(cuid())
+  serverId  String?
+  reason    String?
+  startsAt  DateTime
+  endsAt    DateTime
+  createdAt DateTime @default(now())
+
+  server Server? @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([startsAt, endsAt])
+}
+
+// External service-level checks (HTTP / TCP / ping). The dashboard's host
+// runs these on a schedule; results are stored back here and feed the
+// alert engine when status flips to "down".
+model HealthCheck {
+  id              String    @id @default(cuid())
+  name            String
+  type            String    // "http" | "tcp" | "ping"
+  target          String    // URL for http, host:port for tcp, host for ping
+  intervalSeconds Int       @default(60)
+  timeoutMs       Int       @default(5000)
+  expectedStatus  Int?      // optional override for HTTP (default: any 2xx)
+  enabled         Boolean   @default(true)
+  lastStatus      String?   // "up" | "down" | NULL when never run
+  lastLatencyMs   Int?
+  lastCheckedAt   DateTime?
+  lastError       String?
+  consecutiveDown Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model Alert {
@@ -149,10 +237,20 @@ model Alert {
   type      String
   severity  String   @default("info")
   message   String
-  resolved  Boolean       @default(false)
-  createdAt DateTime      @default(now())
+  resolved  Boolean  @default(false)
+  createdAt DateTime @default(now())
 
-  server Server? @relation(fields: [serverId], references: [id], onDelete: SetNull)
+  // Acknowledgment: clicking "ack" stops future severity-upgrade
+  // notifications on this alert. Does not resolve the alert.
+  acknowledgedAt       DateTime?
+  acknowledgedByUserId String?
+
+  // Snooze: while snoozedUntil is in the future, no notifications fire for
+  // changes on this alert. Resolution still happens automatically.
+  snoozedUntil DateTime?
+
+  server         Server? @relation(fields: [serverId], references: [id], onDelete: SetNull)
+  acknowledgedBy User?   @relation(fields: [acknowledgedByUserId], references: [id], onDelete: SetNull)
 
   @@index([resolved, createdAt])
 }
@@ -172,8 +270,9 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  sessions       Session[]
-  invitesCreated Invite[]
+  sessions           Session[]
+  invitesCreated     Invite[]
+  alertsAcknowledged Alert[]
 }
 
 // Single-use invite tokens. The plaintext token is shown to the inviting

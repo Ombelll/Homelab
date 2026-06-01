@@ -4,6 +4,7 @@ import { AgentKeysPanel } from "@/components/agent-keys-panel";
 import { InvitesPanel } from "@/components/invites-panel";
 import { NotificationsPanel } from "@/components/notifications-panel";
 import { UsersPanel } from "@/components/users-panel";
+import { MaintenancePanel } from "@/components/maintenance-panel";
 import { getCurrentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,8 @@ function AdminSettings() {
         </Card>
 
         <NotificationsPanel />
+
+        <MaintenancePanel />
 
         <AgentKeysPanel />
 

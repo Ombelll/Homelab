@@ -41,6 +41,26 @@ export const api = {
       image: string;
       status: string;
       ports: Array<{ host?: string; container: string; protocol?: string }>;
+      composeProject?: string;
+      composeService?: string;
+      cpuPercent?: number;
+      memoryBytes?: number;
+      memoryLimitBytes?: number;
     }>;
   }) => post("/api/agent/containers", payload),
+
+  disks: (payload: {
+    hostname: string;
+    disks: Array<{
+      mountpoint: string;
+      fstype?: string;
+      totalBytes: number;
+      usedBytes: number;
+    }>;
+  }) => post("/api/agent/disks", payload),
+
+  sensors: (payload: {
+    hostname: string;
+    sensors: Array<{ name: string; kind: string; value: number; unit: string }>;
+  }) => post("/api/agent/sensors", payload),
 };

@@ -14,6 +14,7 @@ import {
   Loader2,
   Menu,
   X,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +22,7 @@ const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/servers", label: "Servers", icon: Server },
   { href: "/containers", label: "Containers", icon: Boxes },
+  { href: "/services", label: "Services", icon: Activity },
   { href: "/alerts", label: "Alerts", icon: Bell },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -194,7 +196,7 @@ function SidebarBody({ user, pathname }: { user: SidebarUser; pathname: string |
           )}
           Sign out
         </button>
-        <div className="text-[11px] text-muted-foreground">v1.1.0</div>
+        <div className="text-[11px] text-muted-foreground">v1.2.0</div>
       </div>
     </>
   );
