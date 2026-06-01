@@ -59,7 +59,7 @@ function parseDockerLine(line: string): DockerContainer | null {
   }
 }
 
-function normalizeStatus(raw: string): string {
+export function normalizeStatus(raw: string): string {
   const s = raw.toLowerCase();
   if (s.startsWith("up") || s === "running") return "running";
   if (s.startsWith("exited") || s === "exited") return "exited";
@@ -76,7 +76,7 @@ function normalizeStatus(raw: string): string {
  * We parse out (host?, container, protocol) — duplicates across IPv4/IPv6 are
  * collapsed by stringifying.
  */
-function parsePorts(raw: string): DockerContainer["ports"] {
+export function parsePorts(raw: string): DockerContainer["ports"] {
   if (!raw) return [];
   const seen = new Set<string>();
   const out: DockerContainer["ports"] = [];

@@ -68,6 +68,10 @@ npm run dev
 # open http://localhost:3000
 ```
 
+On first visit you'll be redirected to `/register` to create the admin
+account. Subsequent visits prompt for sign-in. There is no public sign-up —
+additional users must be invited (UI for that is on the roadmap).
+
 ### Run the agent (on the host you want to monitor)
 
 ```bash
@@ -119,19 +123,23 @@ fresh, `docker compose down -v`.
 - All agent input is validated with Zod before hitting the database.
 - All API responses are JSON and avoid leaking stack traces.
 
-## Scheduled sweep (offline detection)
+## Scheduled maintenance
 
-A maintenance endpoint flips servers to `offline` and opens "agent-missing"
-alerts when a host hasn't checked in for >5 minutes. Hit it from cron or
-any external scheduler:
+Two internal endpoints, both gated by `SWEEP_KEY` (open if unset):
 
 ```bash
+# Offline detection: flip stale servers to "offline", manage agent-missing alerts.
 * * * * * curl -fsS -X POST http://dashboard/api/internal/sweep \
+  -H "x-sweep-key: $SWEEP_KEY" > /dev/null
+
+# Retention: prune metrics, resolved alerts, and completed jobs older than N days.
+30 3 * * * curl -fsS -X POST "http://dashboard/api/internal/retention?days=30" \
   -H "x-sweep-key: $SWEEP_KEY" > /dev/null
 ```
 
-If `SWEEP_KEY` is unset on the dashboard the endpoint is open (acceptable
-behind a VPN). Set it to a long random string for any other deployment.
+The metric table grows ~1 row per server per agent tick. Without retention a
+30-second interval over 5 hosts produces ~430k rows/month — SQLite will
+handle it, but a daily prune keeps queries snappy.
 
 ## Roadmap
 
@@ -141,11 +149,12 @@ behind a VPN). Set it to a long random string for any other deployment.
 - ✅ Historical sparklines on the server detail page.
 - ✅ Per-agent API keys with revocation (Settings → Agent API keys).
 - ✅ Offline detection sweep.
+- ✅ Multi-user auth (scrypt + signed session cookie; bootstrap-only register).
+- ✅ Retention sweep for metrics, resolved alerts, completed jobs.
 - Live log streaming (right now logs are a one-shot tail).
-- Multi-user auth (currently the dashboard assumes trusted single-tenant
-  access behind a VPN).
+- Invite flow for additional users beyond the bootstrap admin.
 - Postgres support (Prisma provider swap + migration).
-- Downsampling for the metric table (retention job).
+- Downsampling for the metric table (compute hourly averages).
 
 ## Project layout
 

@@ -107,6 +107,33 @@ model Alert {
   @@index([resolved, createdAt])
 }
 
+// Dashboard users. Single-tenant for now: anyone with a User row gets full
+// access to the UI. Multi-role / RBAC is on the roadmap.
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions Session[]
+}
+
+// Server-side sessions. The raw token lives only in the user's cookie; we
+// store the SHA-256 hash so a DB leak can't be replayed.
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
 // AgentKey lets us rotate / scope agent credentials in the future. For MVP we
 // also accept the env var AGENT_API_KEY as a fallback.
 model AgentKey {

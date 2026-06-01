@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   LayoutDashboard,
   Server,
@@ -9,6 +10,8 @@ import {
   Bell,
   Settings,
   Cpu,
+  LogOut,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,8 +23,26 @@ const nav = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-export function Sidebar() {
+export function Sidebar({
+  user,
+}: {
+  user: { id: string; email: string; name: string | null };
+}) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function logout() {
+    setSigningOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      /* even if the API call fails, the cookie clear below sends us to /login */
+    }
+    router.replace("/login");
+    router.refresh();
+  }
+
   return (
     <aside className="sticky top-0 hidden h-screen w-60 shrink-0 border-r border-border bg-card/40 px-3 py-6 md:flex md:flex-col">
       <Link href="/" className="mb-8 flex items-center gap-2 px-2">
@@ -56,8 +77,27 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="mt-auto px-2 pt-6 text-[11px] text-muted-foreground">
-        v0.1.0 · MVP
+      <div className="mt-auto space-y-2 px-2 pt-6">
+        <div className="rounded-md border border-border bg-background/40 px-3 py-2 text-xs">
+          <div className="truncate font-medium">{user.name || user.email}</div>
+          {user.name ? (
+            <div className="truncate text-muted-foreground">{user.email}</div>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={logout}
+          disabled={signingOut}
+          className="inline-flex w-full items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+        >
+          {signingOut ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <LogOut className="h-3.5 w-3.5" />
+          )}
+          Sign out
+        </button>
+        <div className="text-[11px] text-muted-foreground">v0.2.0</div>
       </div>
     </aside>
   );
