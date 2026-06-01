@@ -160,6 +160,11 @@ model Container {
   memoryLimitBytes Float?
   statsAt          DateTime?
 
+  // Total restarts since the container was created. The agent reads this
+  // from `docker inspect --format '{{.RestartCount}}'`. A spike here is a
+  // crashloop; the UI surfaces a badge once it crosses a threshold.
+  restartCount     Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -47,6 +47,7 @@ export const api = {
       cpuPercent?: number;
       memoryBytes?: number;
       memoryLimitBytes?: number;
+      restartCount?: number;
     }>;
   }) => post("/api/agent/containers", payload),
 

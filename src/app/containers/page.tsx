@@ -124,7 +124,17 @@ function Group({
           {containers.map((c) => (
             <tr key={c.id} className="hover:bg-muted/20">
               <Td className="font-medium">
-                {c.name}
+                <div className="flex items-center gap-1.5">
+                  <span>{c.name}</span>
+                  {c.restartCount != null && c.restartCount >= 5 ? (
+                    <span
+                      title={`${c.restartCount} restarts since creation`}
+                      className="rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-destructive"
+                    >
+                      ⟳ {c.restartCount}
+                    </span>
+                  ) : null}
+                </div>
                 {c.composeService ? (
                   <div className="text-[11px] text-muted-foreground">{c.composeService}</div>
                 ) : null}

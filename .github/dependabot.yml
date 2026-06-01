@@ -1,0 +1,38 @@
+version: 2
+updates:
+  # Dashboard deps
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Amsterdam"
+    open-pull-requests-limit: 5
+    labels: ["deps", "dashboard"]
+    groups:
+      # Patch/minor noise lumped together; majors stay separate so they
+      # get review.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # Agent deps
+  - package-ecosystem: npm
+    directory: "/agent"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Amsterdam"
+    open-pull-requests-limit: 3
+    labels: ["deps", "agent"]
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # GitHub Actions versions in the CI workflow
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    labels: ["deps", "ci"]

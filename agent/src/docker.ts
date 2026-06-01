@@ -17,6 +17,9 @@ export type DockerContainer = {
   cpuPercent?: number;
   memoryBytes?: number;
   memoryLimitBytes?: number;
+  // Total restarts since creation (from `docker inspect`). High values
+  // indicate a crashloop.
+  restartCount?: number;
 };
 
 export async function listDockerContainers(): Promise<DockerContainer[] | null> {
@@ -42,6 +45,18 @@ export async function listDockerContainers(): Promise<DockerContainer[] | null> 
     for (const c of base) {
       const d = digests.get(c.image);
       if (d) c.imageDigest = d;
+    }
+
+    // Decorate with restart counts (best-effort, one docker inspect for the
+    // whole list).
+    if (base.length > 0) {
+      const restarts = await readRestartCounts(base.map((c) => c.dockerId)).catch(
+        () => new Map<string, number>(),
+      );
+      for (const c of base) {
+        const n = restarts.get(c.dockerId);
+        if (typeof n === "number") c.restartCount = n;
+      }
     }
 
     // Decorate with stats (best-effort). `docker stats --no-stream` returns
@@ -141,6 +156,25 @@ type ContainerStats = {
   memoryBytes: number;
   memoryLimitBytes: number;
 };
+
+/**
+ * Map dockerId → restart count. `docker inspect` accepts an arbitrary
+ * number of ids and a Go template; we ask for "<id> <count>" per line.
+ */
+async function readRestartCounts(ids: string[]): Promise<Map<string, number>> {
+  if (ids.length === 0) return new Map();
+  const { stdout } = await execAsync(
+    `docker inspect --format "{{.Id}} {{.RestartCount}}" ${ids.join(" ")}`,
+    { maxBuffer: 2 * 1024 * 1024 },
+  );
+  const map = new Map<string, number>();
+  for (const line of stdout.split("\n").map((l) => l.trim()).filter(Boolean)) {
+    const [id, count] = line.split(/\s+/);
+    const n = Number(count);
+    if (id && Number.isFinite(n)) map.set(id, n);
+  }
+  return map;
+}
 
 /**
  * Map image reference ("repo:tag") → manifest digest (sha256:…). We read

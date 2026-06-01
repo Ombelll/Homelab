@@ -61,6 +61,7 @@ export async function POST(request: Request) {
           ports: JSON.stringify(c.ports),
           composeProject: c.composeProject ?? null,
           composeService: c.composeService ?? null,
+          restartCount: c.restartCount ?? null,
           ...statsFields,
         },
         create: {
@@ -73,6 +74,7 @@ export async function POST(request: Request) {
           ports: JSON.stringify(c.ports),
           composeProject: c.composeProject ?? null,
           composeService: c.composeService ?? null,
+          restartCount: c.restartCount ?? null,
           ...statsFields,
         },
       });

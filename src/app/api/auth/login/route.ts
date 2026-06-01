@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
 import { SESSION_COOKIE, createSession, sessionCookieOptions } from "@/lib/session";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,26 @@ const schema = z.object({
 // exists or not. Mitigates user-enumeration timing attacks.
 const DUMMY_HASH = "s1$00000000000000000000000000000000$" + "0".repeat(128);
 
+// 5 login attempts per IP per minute. Low enough to make brute-force
+// useless, high enough to forgive the "wait, was it horseBattery or
+// HorseBattery" round of fumbling.
+const LOGIN_LIMIT = 5;
+const LOGIN_WINDOW_MS = 60 * 1000;
+
 export async function POST(request: Request) {
+  const ip = clientIp(request.headers);
+  const limit = rateLimit(`login:${ip}`, LOGIN_LIMIT, LOGIN_WINDOW_MS);
+  if (!limit.ok) {
+    const retryAfter = Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000));
+    return NextResponse.json(
+      { error: "too many login attempts, slow down" },
+      {
+        status: 429,
+        headers: { "retry-after": String(retryAfter) },
+      },
+    );
+  }
+
   let json: unknown;
   try {
     json = await request.json();

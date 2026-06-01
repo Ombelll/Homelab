@@ -39,6 +39,7 @@ export const containerInputSchema = z.object({
   cpuPercent: z.number().min(0).max(10000).optional(),
   memoryBytes: z.number().min(0).optional(),
   memoryLimitBytes: z.number().min(0).optional(),
+  restartCount: z.number().int().min(0).optional(),
 });
 
 export const containerSyncSchema = z.object({
