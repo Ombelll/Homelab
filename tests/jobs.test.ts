@@ -19,6 +19,7 @@ describe("JOB_TYPES allowlist", () => {
   it("matches the documented action set", () => {
     expect([...JOB_TYPES].sort()).toEqual(
       [
+        "agent.update",
         "container.logs",
         "container.logs.stream",
         "container.restart",

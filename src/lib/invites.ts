@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const DEFAULT_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -44,16 +45,26 @@ export async function consumeInvite(rawToken: string): Promise<ConsumeResult> {
 }
 
 /**
- * Atomically claim an invite: flip usedAt only if it's still null, in a single
- * conditional UPDATE. Returns true for the caller that won the race, false for
- * everyone else. This is what makes a single-use invite truly single-use —
- * consumeInvite() + markInviteUsed() has a check-then-act window where two
- * concurrent redemptions could both pass the usedAt check and create two
- * accounts from one token.
+ * Atomically claim a single-use invite by token, in ONE conditional UPDATE
+ * gated on `usedAt IS NULL AND not-yet-expired`. Returns true only for the
+ * caller whose statement actually flipped the row (affected-row count === 1);
+ * every concurrent redemption of the same token gets false.
+ *
+ * This is what makes a single-use invite truly single-use. The read-only
+ * consumeInvite() has a check-then-act window — two concurrent requests can
+ * both pass its `usedAt` check and go on to create two accounts (potentially
+ * two admins) from one token. The single UPDATE here has no such window.
+ *
+ * Pass a transaction client (`tx`) to claim inside a larger transaction, so
+ * the claim rolls back if a later step (e.g. user creation) fails and the
+ * invite stays usable.
  */
-export async function claimInvite(id: string): Promise<boolean> {
-  const res = await prisma.invite.updateMany({
-    where: { id, usedAt: null },
+export async function claimInviteByToken(
+  rawToken: string,
+  client: Prisma.TransactionClient = prisma,
+): Promise<boolean> {
+  const res = await client.invite.updateMany({
+    where: { tokenHash: hashInviteToken(rawToken), usedAt: null, expiresAt: { gt: new Date() } },
     data: { usedAt: new Date() },
   });
   return res.count === 1;

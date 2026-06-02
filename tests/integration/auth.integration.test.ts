@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, verifyPassword } from "@/lib/password";
-import { hashInviteToken, createInvite, consumeInvite, markInviteUsed } from "@/lib/invites";
+import { hashInviteToken, createInvite, consumeInvite, claimInviteByToken } from "@/lib/invites";
 
 /**
  * End-to-end auth flows: registration via invite, password verify path,
@@ -54,13 +54,57 @@ describe("auth (integration)", () => {
 
     const first = await consumeInvite(invite.token);
     expect(first.ok).toBe(true);
-    if (first.ok) {
-      await markInviteUsed(first.invite.id);
-    }
+    // Claim it atomically (what the accept-invite route does).
+    expect(await claimInviteByToken(invite.token)).toBe(true);
 
     const second = await consumeInvite(invite.token);
     expect(second.ok).toBe(false);
     if (!second.ok) expect(second.reason).toBe("used");
+
+    // A second claim of the same token must also fail.
+    expect(await claimInviteByToken(invite.token)).toBe(false);
+  });
+
+  it("claims a single-use invite exactly once under concurrent redemption", async () => {
+    const admin = await prisma.user.create({
+      data: {
+        email: "admin4@example.com",
+        passwordHash: await hashPassword("hunter22"),
+        role: "admin",
+      },
+    });
+    const invite = await createInvite({ createdByUserId: admin.id, role: "admin" });
+
+    // Fire several claims at once. Each would pass a prior read-only
+    // consumeInvite() check, but the atomic conditional UPDATE must let
+    // exactly ONE win — otherwise one invite mints multiple (admin) accounts.
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () => claimInviteByToken(invite.token)),
+    );
+    expect(results.filter(Boolean)).toHaveLength(1);
+
+    const row = await prisma.invite.findUnique({ where: { id: invite.id } });
+    expect(row!.usedAt).not.toBeNull();
+  });
+
+  it("refuses to claim an expired invite", async () => {
+    const admin = await prisma.user.create({
+      data: {
+        email: "admin5@example.com",
+        passwordHash: await hashPassword("hunter22"),
+        role: "admin",
+      },
+    });
+    const invite = await createInvite({ createdByUserId: admin.id });
+    await prisma.invite.update({
+      where: { id: invite.id },
+      data: { expiresAt: new Date(Date.now() - 60_000) },
+    });
+
+    // The claim is gated on expiresAt > now, so it must not flip usedAt.
+    expect(await claimInviteByToken(invite.token)).toBe(false);
+    const row = await prisma.invite.findUnique({ where: { id: invite.id } });
+    expect(row!.usedAt).toBeNull();
   });
 
   it("rejects an expired invite", async () => {
