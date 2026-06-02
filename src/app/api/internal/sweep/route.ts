@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { OFFLINE_AFTER_MS } from "@/lib/staleness";
 import { notifyAlert } from "@/lib/notifications";
+import { checkSweepKey } from "@/lib/sweep-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +17,8 @@ export const dynamic = "force-dynamic";
  * VPN-only deployment, but set it if the dashboard is reachable elsewhere).
  */
 export async function POST(request: Request) {
-  const expected = process.env.SWEEP_KEY;
-  if (expected && expected.length > 0) {
-    const provided = request.headers.get("x-sweep-key");
-    if (provided !== expected) {
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
-  }
+  const denied = checkSweepKey(request);
+  if (denied) return denied;
 
   const cutoff = new Date(Date.now() - OFFLINE_AFTER_MS);
   const servers = await prisma.server.findMany();

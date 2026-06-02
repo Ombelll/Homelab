@@ -1,10 +1,10 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import net from "node:net";
 import { promisify } from "node:util";
 import { prisma } from "@/lib/prisma";
 import { notifyAlert } from "@/lib/notifications";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // Threshold (in consecutive down probes) before we open an alert. Avoids
 // firing on a single transient failure.
@@ -93,18 +93,19 @@ async function runTcp(target: string, timeoutMs: number): Promise<CheckResult> {
 }
 
 async function runPing(host: string, timeoutMs: number): Promise<CheckResult> {
-  // Refuse anything that doesn't look like a hostname or IP. This is
-  // belt-and-braces; we also pass arguments via fixed argv to execAsync.
-  if (!/^[\w.\-:]+$/.test(host)) return { ok: false, error: "invalid host" };
+  // Refuse anything that isn't a bare hostname/IP, and never let it start with
+  // '-' so it can't be parsed as a ping flag (e.g. "-f" flood). We pass argv
+  // via execFile — no shell — so this regex is belt-and-braces.
+  if (!/^[\w.][\w.\-:]*$/.test(host)) return { ok: false, error: "invalid host" };
   const isWin = process.platform === "win32";
   // Linux/macOS: -c 1 (count), -W timeout. macOS uses seconds; Linux too.
   const sec = Math.max(1, Math.ceil(timeoutMs / 1000));
-  const cmd = isWin
-    ? `ping -n 1 -w ${timeoutMs} ${host}`
-    : `ping -c 1 -W ${sec} ${host}`;
+  const args = isWin
+    ? ["-n", "1", "-w", String(timeoutMs), host]
+    : ["-c", "1", "-W", String(sec), host];
   const start = Date.now();
   try {
-    await execAsync(cmd, { timeout: timeoutMs + 1000 });
+    await execFileAsync("ping", args, { timeout: timeoutMs + 1000 });
     return { ok: true, latencyMs: Date.now() - start };
   } catch (err) {
     return { ok: false, latencyMs: Date.now() - start, error: (err as Error).message.split("\n")[0] };

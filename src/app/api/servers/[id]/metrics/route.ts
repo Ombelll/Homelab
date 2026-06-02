@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/authz";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,9 @@ const RANGES: Record<string, { minutes: number; source: "raw" | "hourly" }> = {
 };
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
+  const guard = await requireUser();
+  if (!guard.ok) return guard.response;
+
   const url = new URL(request.url);
   const rangeKey = url.searchParams.get("range") ?? "1h";
   const range = RANGES[rangeKey] ?? RANGES["1h"];

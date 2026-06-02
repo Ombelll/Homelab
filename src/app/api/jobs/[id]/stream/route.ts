@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/authz";
 
 export const dynamic = "force-dynamic";
 // SSE needs Node runtime; the Edge runtime has different streaming semantics
@@ -21,6 +22,9 @@ const HEARTBEAT_MS = 15_000;
  * tears down its process on the next chunk post.
  */
 export async function GET(request: Request, { params }: { params: { id: string } }) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+
   const job = await prisma.job.findUnique({ where: { id: params.id } });
   if (!job) {
     return new Response(JSON.stringify({ error: "not found" }), {
