@@ -9,7 +9,10 @@ WORKDIR /app
 RUN apk add --no-cache libc6-compat openssl
 
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+# --ignore-scripts: the package.json `postinstall: prisma generate` would run
+# here, before prisma/ is copied, and fail ("schema not found"). We run the
+# real `prisma generate` below (line ~19) once the schema is in place.
+RUN npm ci --no-audit --no-fund --ignore-scripts
 
 COPY prisma ./prisma
 COPY tsconfig.json next.config.js tailwind.config.ts postcss.config.js ./
