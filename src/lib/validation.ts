@@ -97,4 +97,31 @@ export const sensorSyncSchema = z.object({
   sensors: z.array(sensorInputSchema).max(128),
 });
 
+export const diskIoRateSchema = z.object({
+  device: z.string().min(1).max(64),
+  readBps: z.number().min(0),
+  writeBps: z.number().min(0),
+});
+
+// Combined per-tick payload — the agent sends everything in one POST to
+// /api/agent/report instead of five separate calls. Every section beyond the
+// three core gauges is optional, so a partial collection (one collector
+// failing on the host) still produces a valid report.
+export const reportSchema = z.object({
+  hostname: z.string().min(1).max(255),
+  cpuPercent: z.number().min(0).max(100),
+  memoryPercent: z.number().min(0).max(100),
+  diskPercent: z.number().min(0).max(100),
+  swapPercent: z.number().min(0).max(100).optional(),
+  cpuPerCore: z.array(z.number().min(0).max(100)).max(256).optional(),
+  processCount: z.number().int().min(0).optional(),
+  failedUnits: z.number().int().min(0).optional(),
+  networkRates: z.array(networkRateSchema).max(32).optional(),
+  diskIoRates: z.array(diskIoRateSchema).max(64).optional(),
+  containers: z.array(containerInputSchema).optional(),
+  disks: z.array(diskInputSchema).max(256).optional(),
+  sensors: z.array(sensorInputSchema).max(128).optional(),
+  zfsPools: z.array(zfsPoolInputSchema).max(64).optional(),
+});
+
 export type ContainerInput = z.infer<typeof containerInputSchema>;

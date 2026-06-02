@@ -31,11 +31,54 @@ function snapshot() {
   return { idle, total };
 }
 
+/**
+ * Per-core CPU usage (%) over a 1s window — same diff method as
+ * getCpuPercent but kept per core. Runs concurrently with getCpuPercent
+ * (both sleep 1s) so it adds no wall-clock time to a tick.
+ */
+export async function getCpuPerCore(): Promise<number[]> {
+  const a = perCoreSnapshot();
+  await new Promise((r) => setTimeout(r, 1000));
+  const b = perCoreSnapshot();
+  const out: number[] = [];
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    const idle = b[i].idle - a[i].idle;
+    const total = b[i].total - a[i].total;
+    out.push(total <= 0 ? 0 : Math.max(0, Math.min(100, ((total - idle) / total) * 100)));
+  }
+  return out;
+}
+
+function perCoreSnapshot() {
+  return os.cpus().map((cpu) => {
+    const t = cpu.times;
+    return { idle: t.idle, total: t.user + t.nice + t.sys + t.idle + t.irq };
+  });
+}
+
 export function getMemoryPercent(): number {
   const total = os.totalmem();
   const free = os.freemem();
   if (total <= 0) return 0;
   return Math.max(0, Math.min(100, ((total - free) / total) * 100));
+}
+
+/**
+ * Swap usage (%) from /proc/meminfo. Linux only; returns 0 when there's no
+ * swap configured, and undefined on non-Linux / read failure so the field
+ * is simply omitted from the report.
+ */
+export async function getSwapPercent(): Promise<number | undefined> {
+  if (process.platform !== "linux") return undefined;
+  try {
+    const mem = await fs.readFile("/proc/meminfo", "utf8");
+    const total = Number(/SwapTotal:\s+(\d+)/.exec(mem)?.[1] ?? 0);
+    const free = Number(/SwapFree:\s+(\d+)/.exec(mem)?.[1] ?? 0);
+    if (total <= 0) return 0;
+    return Math.max(0, Math.min(100, ((total - free) / total) * 100));
+  } catch {
+    return undefined;
+  }
 }
 
 /**

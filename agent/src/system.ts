@@ -54,6 +54,40 @@ export async function getRebootRequired(): Promise<boolean> {
   return false;
 }
 
+/**
+ * Number of running processes (count of /proc/[pid] dirs). Linux only;
+ * undefined elsewhere so the field is omitted.
+ */
+export async function getProcessCount(): Promise<number | undefined> {
+  if (process.platform !== "linux") return undefined;
+  try {
+    const entries = await fs.readdir("/proc");
+    return entries.filter((e) => /^\d+$/.test(e)).length;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Count of failed systemd units — a cheap, high-signal health indicator.
+ * Linux + systemd only; undefined otherwise (or if systemctl is absent).
+ */
+export async function getFailedUnits(): Promise<number | undefined> {
+  if (process.platform !== "linux") return undefined;
+  try {
+    const { stdout } = await execAsync(
+      "systemctl list-units --state=failed --no-legend --plain --no-pager",
+      { timeout: 5_000 },
+    );
+    return stdout
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean).length;
+  } catch {
+    return undefined;
+  }
+}
+
 function round(n: number): number {
   return Math.round(n * 100) / 100;
 }

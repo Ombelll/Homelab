@@ -1,17 +1,26 @@
 import { config } from "./config.js";
-import { api } from "./client.js";
+import { api, ApiError } from "./client.js";
 import {
   getCpuPercent,
+  getCpuPerCore,
   getDiskPercent,
   getIpAddress,
   getMemoryPercent,
   getOsDescription,
+  getSwapPercent,
 } from "./collector.js";
 import { listDockerContainers } from "./docker.js";
 import { getDisks } from "./disks.js";
 import { getSensors } from "./sensors.js";
-import { getBootAt, getLoadAvg, getRebootRequired } from "./system.js";
+import {
+  getBootAt,
+  getFailedUnits,
+  getLoadAvg,
+  getProcessCount,
+  getRebootRequired,
+} from "./system.js";
 import { getNetworkRates } from "./network.js";
+import { getDiskIoRates } from "./diskio.js";
 import { getZfsPools } from "./zfs.js";
 import { startJobRunner } from "./runner.js";
 
@@ -34,45 +43,74 @@ async function checkin() {
 }
 
 async function tick() {
-  const [cpu, disk, containers, disks, sensors, networkRates, zfsPools] = await Promise.all([
-    getCpuPercent(),
-    getDiskPercent(),
-    listDockerContainers(),
-    getDisks(),
-    getSensors(),
-    getNetworkRates(),
-    getZfsPools(),
+  // Collect everything concurrently and tolerate individual failures — a
+  // collector that throws (a flaky `df`, missing systemctl) just leaves its
+  // section out of the report instead of dropping the whole tick.
+  const settled = await Promise.allSettled([
+    getCpuPercent(), //        0
+    getCpuPerCore(), //        1
+    getDiskPercent(), //       2
+    listDockerContainers(), // 3
+    getDisks(), //             4
+    getSensors(), //           5
+    getNetworkRates(), //      6
+    getZfsPools(), //          7
+    getSwapPercent(), //       8
+    getProcessCount(), //      9
+    getFailedUnits(), //      10
+    getDiskIoRates(), //      11
   ]);
-  const mem = getMemoryPercent();
+  const val = <T>(i: number, fallback: T): T =>
+    settled[i].status === "fulfilled"
+      ? (settled[i] as PromiseFulfilledResult<T>).value
+      : fallback;
 
-  await api.metrics({
+  const containers = val<Awaited<ReturnType<typeof listDockerContainers>>>(3, null);
+  const nonEmpty = <T>(a: T[]): T[] | undefined => (a.length > 0 ? a : undefined);
+
+  const payload = {
     hostname: config.hostname,
-    cpuPercent: round(cpu),
-    memoryPercent: round(mem),
-    diskPercent: round(disk),
-    networkRates: networkRates.length > 0 ? networkRates : undefined,
-  });
+    cpuPercent: round(val(0, 0)),
+    memoryPercent: round(getMemoryPercent()),
+    diskPercent: round(val(2, 0)),
+    swapPercent: optRound(val<number | undefined>(8, undefined)),
+    cpuPerCore: nonEmpty(val<number[]>(1, []).map(round)),
+    processCount: val<number | undefined>(9, undefined),
+    failedUnits: val<number | undefined>(10, undefined),
+    networkRates: nonEmpty(val(6, [])),
+    diskIoRates: nonEmpty(val(11, [])),
+    containers: containers ?? undefined,
+    disks: nonEmpty(val(4, [])),
+    sensors: nonEmpty(val(5, [])),
+    zfsPools: nonEmpty(val(7, [])),
+  };
 
-  if (containers) {
-    await api.containers({ hostname: config.hostname, containers });
-  } else if (!dockerWarned) {
+  try {
+    await api.report(payload);
+  } catch (err) {
+    // 404 = the dashboard doesn't know this host (restarted DB / never
+    // registered). Re-check-in right away and resend, instead of waiting for
+    // the 15-minute periodic checkin.
+    if (err instanceof ApiError && err.status === 404) {
+      await checkin();
+      await api.report(payload);
+    } else {
+      throw err;
+    }
+  }
+
+  if (containers === null && !dockerWarned) {
     console.log("[agent] docker not detected on this host — skipping container sync");
     dockerWarned = true;
-  }
-
-  if (disks.length > 0) {
-    await api.disks({ hostname: config.hostname, disks });
-  }
-  if (sensors.length > 0) {
-    await api.sensors({ hostname: config.hostname, sensors });
-  }
-  if (zfsPools.length > 0) {
-    await api.zfs({ hostname: config.hostname, pools: zfsPools });
   }
 }
 
 function round(n: number) {
   return Math.round(n * 10) / 10;
+}
+
+function optRound(n: number | undefined) {
+  return n == null ? undefined : round(n);
 }
 
 async function main() {

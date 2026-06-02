@@ -39,6 +39,9 @@ model Server {
   bootAt              DateTime?
   loadAvg             String?
   networkRates        String?
+  // Per-device disk I/O bytes/sec for the last interval — JSON of
+  // [{device, readBps, writeBps}]. Latest snapshot only, like networkRates.
+  diskIoRates         String?
   rebootRequired      Boolean   @default(false)
   rebootRequiredSince DateTime?
 
@@ -137,6 +140,12 @@ model Metric {
   cpuPercent    Float
   memoryPercent Float
   diskPercent   Float
+  // Extended metrics — all nullable so older agents (and historical rows)
+  // keep working. cpuPerCore is a JSON array of per-core percentages.
+  swapPercent   Float?
+  cpuPerCore    String?
+  processCount  Int?
+  failedUnits   Int?
   createdAt     DateTime @default(now())
 
   server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
