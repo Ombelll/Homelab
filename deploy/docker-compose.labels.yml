@@ -1,0 +1,25 @@
+# Traefik routing for the dashboard — overlay on top of the base compose.
+#
+# Run from the repo root (where docker-compose.yml lives):
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.labels.yml up -d
+#
+# DASHBOARD_HOST is the hostname Traefik routes on. With Tailscale Serve this
+# is the LXC's tailnet name, e.g. docker.<your-tailnet>.ts.net (see
+# deploy/fase-4-traefik-https.md). Set it in your .env.
+
+services:
+  dashboard:
+    networks:
+      - default
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.dashboard.rule=Host(`${DASHBOARD_HOST:?set DASHBOARD_HOST in .env}`)"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+      - "traefik.http.routers.dashboard.middlewares=security-headers@file"
+      - "traefik.http.services.dashboard.loadbalancer.server.port=3000"
+
+networks:
+  proxy:
+    external: true

@@ -1,0 +1,50 @@
+# Traefik v3 static configuration.
+#
+# In the default homelab setup Traefik terminates plain HTTP on :80 and
+# Tailscale Serve sits in front of it to provide valid HTTPS for the tailnet
+# (see fase-4-traefik-https.md, Deel C). That means Traefik itself only needs
+# the `web` entrypoint. The Let's Encrypt path (own domain) adds `websecure`
+# and a certresolver — those blocks are commented out below.
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+entryPoints:
+  web:
+    address: ":80"
+  # --- Let's Encrypt path only: terminate TLS at Traefik instead of Tailscale.
+  # websecure:
+  #   address: ":443"
+  #   http:
+  #     tls:
+  #       certResolver: le
+
+providers:
+  # Discover services from Docker labels, but only those that opt in.
+  docker:
+    exposedByDefault: false
+    network: proxy
+  # File provider for middlewares and any static routers.
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+
+# Traefik's own dashboard. Never exposed insecurely; routed (and protected)
+# via a labelled router in dynamic.yml if you want it.
+api:
+  dashboard: true
+  insecure: false
+
+log:
+  level: INFO
+accessLog: {}
+
+# --- Let's Encrypt path only: DNS-01 challenge (no public IP needed).
+# certificatesResolvers:
+#   le:
+#     acme:
+#       email: you@example.com
+#       storage: /acme/acme.json
+#       dnsChallenge:
+#         provider: cloudflare   # set CF_DNS_API_TOKEN in the traefik env

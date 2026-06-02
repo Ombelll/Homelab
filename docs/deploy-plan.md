@@ -368,6 +368,11 @@ ziet realtime CPU/RAM/disk grafiek van de host zelf.
 
 **Doel:** `homelab.<jouw-tailnet>.ts.net` ipv `http://<ip>:3000`, automatische HTTPS.
 
+> **Uitgewerkt:** zie [`deploy/fase-4-traefik-https.md`](../deploy/fase-4-traefik-https.md)
+> voor de productie-versie met een Traefik v3-compose, security-headers, een
+> dashboard labels-overlay, en HTTPS via Tailscale Serve (of eigen domein +
+> Let's Encrypt). De stappen hieronder zijn de oorspronkelijke schets.
+
 ### Stappen
 
 1. Voeg Traefik toe als nieuwe service in een `traefik-compose.yml`:

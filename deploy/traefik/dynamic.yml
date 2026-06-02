@@ -1,0 +1,34 @@
+# Traefik v3 dynamic configuration (file provider).
+# Reusable middlewares + the optional Traefik dashboard router.
+
+http:
+  middlewares:
+    # Sane security headers for every service that opts in via
+    # `traefik.http.routers.<name>.middlewares=security-headers@file`.
+    security-headers:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        # HSTS only makes sense once HTTPS terminates here (Let's Encrypt path).
+        # With Tailscale Serve fronting plain :80 it's harmless to leave off.
+        # stsSeconds: 31536000
+        # stsIncludeSubdomains: true
+
+    # Basic-auth gate for the Traefik dashboard. Generate a user:hash with:
+    #   htpasswd -nbB admin 'your-password'
+    # then paste the (escaped) line below.
+    traefik-auth:
+      basicAuth:
+        users:
+          - "admin:$2y$05$REPLACE_WITH_A_BCRYPT_HASH"
+
+  routers:
+    # Traefik's own dashboard at http://<host>/  →  optional, behind auth.
+    # Uncomment and set a Host to enable it.
+    # traefik-dashboard:
+    #   rule: "Host(`traefik.lan`)"
+    #   entrypoints: [web]
+    #   service: api@internal
+    #   middlewares: [traefik-auth]
