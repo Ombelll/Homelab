@@ -68,6 +68,7 @@ export async function POST(request: Request) {
         lastSeenAt: new Date(),
         ...(d.networkRates ? { networkRates: JSON.stringify(d.networkRates) } : {}),
         ...(d.diskIoRates ? { diskIoRates: JSON.stringify(d.diskIoRates) } : {}),
+        ...(d.topProcesses ? { topProcesses: JSON.stringify(d.topProcesses) } : {}),
       },
     }),
   ];

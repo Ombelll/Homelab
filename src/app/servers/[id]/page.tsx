@@ -74,6 +74,9 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
   const diskIoRates = parseJsonField<Array<{ device: string; readBps: number; writeBps: number }>>(
     server.diskIoRates,
   );
+  const topProcesses = parseJsonField<
+    Array<{ pid: number; name: string; cpuPercent: number; memBytes: number }>
+  >(server.topProcesses);
   const latest = server.metrics[0];
   const cpuPerCore = parseJsonField<number[]>(latest?.cpuPerCore);
 
@@ -212,6 +215,34 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
               );
             })}
           </div>
+        </div>
+      ) : null}
+
+      {topProcesses && topProcesses.length > 0 ? (
+        <div className="mb-6 rounded-xl border border-border bg-card p-3">
+          <div className="mb-2 text-xs text-muted-foreground">Top processes (by CPU)</div>
+          <ul className="space-y-1.5 text-xs">
+            {topProcesses.map((p) => {
+              const tone =
+                p.cpuPercent >= 90 ? "text-destructive" : p.cpuPercent >= 50 ? "text-warning" : "";
+              return (
+                <li key={p.pid} className="flex items-center gap-3">
+                  <span className="w-14 shrink-0 text-right font-mono tabular-nums text-muted-foreground">
+                    {p.pid}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-medium" title={p.name}>
+                    {p.name}
+                  </span>
+                  <span className="w-24 shrink-0 text-right tabular-nums text-muted-foreground">
+                    {formatBytes(p.memBytes)}
+                  </span>
+                  <span className={`w-16 shrink-0 text-right tabular-nums font-medium ${tone}`}>
+                    {p.cpuPercent.toFixed(1)}%
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       ) : null}
 
@@ -366,12 +397,38 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
           ) : (
             <ul className="divide-y divide-border text-sm">
               {server.containers.map((c) => (
-                <li key={c.id} className="flex items-center justify-between py-2">
+                <li key={c.id} className="flex items-center justify-between gap-3 py-2">
                   <div className="min-w-0">
-                    <div className="font-medium">{c.name}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium">{c.name}</span>
+                      {c.restartCount != null && c.restartCount >= 5 ? (
+                        <span
+                          title={`${c.restartCount} restarts since creation`}
+                          className="rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-destructive"
+                        >
+                          ⟳ {c.restartCount}
+                        </span>
+                      ) : null}
+                      {c.updateAvailable ? (
+                        <span
+                          title="Newer image available on the registry"
+                          className="rounded bg-warning/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-warning"
+                        >
+                          update
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="truncate font-mono text-xs text-muted-foreground">{c.image}</div>
                   </div>
-                  <StatusBadge status={c.status} />
+                  <div className="flex shrink-0 items-center gap-3">
+                    {c.cpuPercent != null || c.memoryBytes != null ? (
+                      <div className="text-right text-[11px] tabular-nums text-muted-foreground">
+                        {c.cpuPercent != null ? <div>{c.cpuPercent.toFixed(1)}% cpu</div> : null}
+                        {c.memoryBytes != null ? <div>{formatBytes(c.memoryBytes)}</div> : null}
+                      </div>
+                    ) : null}
+                    <StatusBadge status={c.status} />
+                  </div>
                 </li>
               ))}
             </ul>

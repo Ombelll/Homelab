@@ -42,6 +42,9 @@ model Server {
   // Per-device disk I/O bytes/sec for the last interval — JSON of
   // [{device, readBps, writeBps}]. Latest snapshot only, like networkRates.
   diskIoRates         String?
+  // Top processes by CPU at the last tick — JSON of
+  // [{pid, name, cpuPercent, memBytes}]. Latest snapshot only; not historised.
+  topProcesses        String?
   rebootRequired      Boolean   @default(false)
   rebootRequiredSince DateTime?
 

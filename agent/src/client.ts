@@ -65,6 +65,7 @@ export const api = {
     failedUnits?: number;
     networkRates?: Array<{ iface: string; rxBps: number; txBps: number }>;
     diskIoRates?: Array<{ device: string; readBps: number; writeBps: number }>;
+    topProcesses?: Array<{ pid: number; name: string; cpuPercent: number; memBytes: number }>;
     containers?: unknown[];
     disks?: unknown[];
     sensors?: unknown[];

@@ -103,6 +103,14 @@ export const diskIoRateSchema = z.object({
   writeBps: z.number().min(0),
 });
 
+export const topProcessSchema = z.object({
+  pid: z.number().int().min(0),
+  name: z.string().min(1).max(128),
+  // Per-core-normalised like `top`, so a multi-threaded process can exceed 100.
+  cpuPercent: z.number().min(0).max(100000),
+  memBytes: z.number().min(0),
+});
+
 // Combined per-tick payload — the agent sends everything in one POST to
 // /api/agent/report instead of five separate calls. Every section beyond the
 // three core gauges is optional, so a partial collection (one collector
@@ -118,6 +126,7 @@ export const reportSchema = z.object({
   failedUnits: z.number().int().min(0).optional(),
   networkRates: z.array(networkRateSchema).max(32).optional(),
   diskIoRates: z.array(diskIoRateSchema).max(64).optional(),
+  topProcesses: z.array(topProcessSchema).max(16).optional(),
   containers: z.array(containerInputSchema).optional(),
   disks: z.array(diskInputSchema).max(256).optional(),
   sensors: z.array(sensorInputSchema).max(128).optional(),

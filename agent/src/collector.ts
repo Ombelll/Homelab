@@ -1,5 +1,5 @@
 import os from "node:os";
-import { promises as fs } from "node:fs";
+import { promises as fs, readFileSync } from "node:fs";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -57,6 +57,23 @@ function perCoreSnapshot() {
 }
 
 export function getMemoryPercent(): number {
+  // On Linux, prefer MemAvailable from /proc/meminfo. os.freemem() maps to
+  // MemFree, which counts reclaimable page cache and ZFS ARC as "used" and so
+  // overstates real memory pressure — a ZFS host can read ~95% with gigabytes
+  // genuinely free. MemAvailable is the kernel's estimate of what a new
+  // allocation can actually get, which is what we want for alerts and gauges.
+  if (process.platform === "linux") {
+    try {
+      const mem = readFileSync("/proc/meminfo", "utf8");
+      const total = Number(/MemTotal:\s+(\d+)/.exec(mem)?.[1] ?? 0);
+      const avail = Number(/MemAvailable:\s+(\d+)/.exec(mem)?.[1] ?? NaN);
+      if (total > 0 && Number.isFinite(avail)) {
+        return Math.max(0, Math.min(100, ((total - avail) / total) * 100));
+      }
+    } catch {
+      // fall through to the os.freemem() path below
+    }
+  }
   const total = os.totalmem();
   const free = os.freemem();
   if (total <= 0) return 0;
