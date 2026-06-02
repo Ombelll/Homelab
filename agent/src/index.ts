@@ -10,27 +10,38 @@ import {
 import { listDockerContainers } from "./docker.js";
 import { getDisks } from "./disks.js";
 import { getSensors } from "./sensors.js";
+import { getBootAt, getLoadAvg, getRebootRequired } from "./system.js";
+import { getNetworkRates } from "./network.js";
+import { getZfsPools } from "./zfs.js";
 import { startJobRunner } from "./runner.js";
 
 let dockerWarned = false;
 
 async function checkin() {
-  const osDesc = await getOsDescription();
+  const [osDesc, rebootRequired] = await Promise.all([
+    getOsDescription(),
+    getRebootRequired(),
+  ]);
   await api.checkin({
     hostname: config.hostname,
     name: config.serverName,
     ipAddress: getIpAddress(),
     os: osDesc,
+    bootAt: getBootAt(),
+    loadAvg: getLoadAvg(),
+    rebootRequired,
   });
 }
 
 async function tick() {
-  const [cpu, disk, containers, disks, sensors] = await Promise.all([
+  const [cpu, disk, containers, disks, sensors, networkRates, zfsPools] = await Promise.all([
     getCpuPercent(),
     getDiskPercent(),
     listDockerContainers(),
     getDisks(),
     getSensors(),
+    getNetworkRates(),
+    getZfsPools(),
   ]);
   const mem = getMemoryPercent();
 
@@ -39,6 +50,7 @@ async function tick() {
     cpuPercent: round(cpu),
     memoryPercent: round(mem),
     diskPercent: round(disk),
+    networkRates: networkRates.length > 0 ? networkRates : undefined,
   });
 
   if (containers) {
@@ -53,6 +65,9 @@ async function tick() {
   }
   if (sensors.length > 0) {
     await api.sensors({ hostname: config.hostname, sensors });
+  }
+  if (zfsPools.length > 0) {
+    await api.zfs({ hostname: config.hostname, pools: zfsPools });
   }
 }
 

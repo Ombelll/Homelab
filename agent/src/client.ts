@@ -24,6 +24,9 @@ export const api = {
     name?: string;
     ipAddress?: string;
     os?: string;
+    bootAt?: string;
+    loadAvg?: [number, number, number];
+    rebootRequired?: boolean;
   }) => post("/api/agent/checkin", payload),
 
   metrics: (payload: {
@@ -31,6 +34,7 @@ export const api = {
     cpuPercent: number;
     memoryPercent: number;
     diskPercent: number;
+    networkRates?: Array<{ iface: string; rxBps: number; txBps: number }>;
   }) => post("/api/agent/metrics", payload),
 
   containers: (payload: {
@@ -65,4 +69,9 @@ export const api = {
     hostname: string;
     sensors: Array<{ name: string; kind: string; value: number; unit: string }>;
   }) => post("/api/agent/sensors", payload),
+
+  zfs: (payload: {
+    hostname: string;
+    pools: Array<{ name: string; health: string; totalBytes: number; usedBytes: number; lastScrubAt?: string }>;
+  }) => post("/api/agent/zfs", payload),
 };

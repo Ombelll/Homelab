@@ -29,7 +29,20 @@ export async function POST(request: Request) {
     return unauthorized();
   }
 
-  const { hostname, name, ipAddress, os, status } = parsed.data;
+  const { hostname, name, ipAddress, os, status, bootAt, loadAvg, rebootRequired } =
+    parsed.data;
+
+  // Look up existing server to compute rebootRequiredSince: only stamp it
+  // when the flag transitions from false→true, so the dashboard can show
+  // "asks for reboot since 5 days ago" instead of resetting every tick.
+  const existing = await prisma.server.findUnique({ where: { hostname } });
+  const reboot = rebootRequired ?? false;
+  const rebootRequiredSince =
+    reboot && !existing?.rebootRequired
+      ? new Date()
+      : reboot
+        ? existing?.rebootRequiredSince ?? new Date()
+        : null;
 
   const server = await prisma.server.upsert({
     where: { hostname },
@@ -39,6 +52,10 @@ export async function POST(request: Request) {
       ...(os && { os }),
       status: status ?? "online",
       lastSeenAt: new Date(),
+      ...(bootAt && { bootAt: new Date(bootAt) }),
+      ...(loadAvg && { loadAvg: JSON.stringify(loadAvg) }),
+      rebootRequired: reboot,
+      rebootRequiredSince,
     },
     create: {
       hostname,
@@ -47,6 +64,10 @@ export async function POST(request: Request) {
       os,
       status: status ?? "online",
       lastSeenAt: new Date(),
+      bootAt: bootAt ? new Date(bootAt) : null,
+      loadAvg: loadAvg ? JSON.stringify(loadAvg) : null,
+      rebootRequired: reboot,
+      rebootRequiredSince,
     },
   });
 

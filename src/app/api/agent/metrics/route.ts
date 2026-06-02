@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     return unauthorized();
   }
 
-  const { hostname, cpuPercent, memoryPercent, diskPercent } = parsed.data;
+  const { hostname, cpuPercent, memoryPercent, diskPercent, networkRates } = parsed.data;
 
   const server = await prisma.server.findUnique({ where: { hostname } });
   if (!server) {
@@ -46,7 +46,14 @@ export async function POST(request: Request) {
 
   await prisma.server.update({
     where: { id: server.id },
-    data: { status, lastSeenAt: new Date() },
+    data: {
+      status,
+      lastSeenAt: new Date(),
+      // networkRates is per-iface bytes/sec for the last interval. We
+      // overwrite the column rather than time-series it; the Server row
+      // always holds the latest snapshot.
+      ...(networkRates ? { networkRates: JSON.stringify(networkRates) } : {}),
+    },
   });
 
   await evaluateMetricAlerts({

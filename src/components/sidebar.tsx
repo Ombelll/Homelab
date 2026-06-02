@@ -196,7 +196,7 @@ function SidebarBody({ user, pathname }: { user: SidebarUser; pathname: string |
           )}
           Sign out
         </button>
-        <div className="text-[11px] text-muted-foreground">v1.5.0</div>
+        <div className="text-[11px] text-muted-foreground">v1.6.0</div>
       </div>
     </>
   );

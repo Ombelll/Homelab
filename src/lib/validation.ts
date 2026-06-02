@@ -12,6 +12,16 @@ export const checkinSchema = z.object({
   ipAddress: z.string().max(64).optional(),
   os: z.string().max(255).optional(),
   status: z.enum(SERVER_STATUS).optional(),
+  // System metadata — all optional so older agents keep working.
+  bootAt: z.string().datetime().optional(),
+  loadAvg: z.tuple([z.number(), z.number(), z.number()]).optional(),
+  rebootRequired: z.boolean().optional(),
+});
+
+export const networkRateSchema = z.object({
+  iface: z.string().min(1).max(64),
+  rxBps: z.number().min(0),
+  txBps: z.number().min(0),
 });
 
 export const metricsSchema = z.object({
@@ -19,6 +29,22 @@ export const metricsSchema = z.object({
   cpuPercent: z.number().min(0).max(100),
   memoryPercent: z.number().min(0).max(100),
   diskPercent: z.number().min(0).max(100),
+  // Per-interface bytes/sec — agent computes the delta locally. We store
+  // the latest snapshot on the Server row (no time-series for now).
+  networkRates: z.array(networkRateSchema).max(32).optional(),
+});
+
+export const zfsPoolInputSchema = z.object({
+  name: z.string().min(1).max(255),
+  health: z.string().min(1).max(64),
+  totalBytes: z.number().min(0),
+  usedBytes: z.number().min(0),
+  lastScrubAt: z.string().datetime().optional(),
+});
+
+export const zfsSyncSchema = z.object({
+  hostname: z.string().min(1).max(255),
+  pools: z.array(zfsPoolInputSchema).max(64),
 });
 
 export const containerPortSchema = z.object({

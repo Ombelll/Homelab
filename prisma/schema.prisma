@@ -28,6 +28,20 @@ model Server {
   // Optional MAC address. When set, the dashboard exposes a Wake-on-LAN
   // button on the server detail. Format flexible (with/without colons).
   macAddress String?
+
+  // System-level fields populated on agent checkin / metric tick.
+  // bootAt: when the host last booted (computed from os.uptime()).
+  // loadAvg: JSON of [1m, 5m, 15m]. Linux/macOS only; Windows reports [0,0,0].
+  // networkRates: JSON of [{iface, rxBps, txBps}] — the rate between the
+  //   last two agent ticks, computed agent-side from RX/TX byte deltas.
+  // rebootRequired: true when the host has a pending reboot (e.g.
+  //   /var/run/reboot-required on Debian, or the Windows CBS registry key).
+  bootAt              DateTime?
+  loadAvg             String?
+  networkRates        String?
+  rebootRequired      Boolean   @default(false)
+  rebootRequiredSince DateTime?
+
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
@@ -39,6 +53,29 @@ model Server {
   disks              Disk[]
   sensors            Sensor[]
   maintenanceWindows MaintenanceWindow[]
+  zfsPools           ZfsPool[]
+}
+
+// ZFS pool health snapshot. The agent reads `zpool list -H` plus
+// `zpool status -x` once per tick and upserts here. Pools that disappear
+// from the agent's report are deleted (e.g. a USB pool exported).
+//
+// health values: "ONLINE" | "DEGRADED" | "FAULTED" | "OFFLINE" | "UNAVAIL"
+//   — we don't normalise; whatever zpool reports gets stored.
+model ZfsPool {
+  id          String    @id @default(cuid())
+  serverId    String
+  name        String
+  health      String
+  totalBytes  Float
+  usedBytes   Float
+  lastScrubAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, name])
+  @@index([serverId])
 }
 
 // Job is a command the dashboard wants an agent to execute on a host. The
