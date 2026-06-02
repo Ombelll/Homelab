@@ -1,0 +1,42 @@
+# Vaultwarden — lightweight Bitwarden-compatible password manager.
+#
+# Run from this dir:  docker compose up -d
+# Uses the shared Postgres LXC (CT 100, 192.168.1.20) — create the db/user
+# first, see deploy/fase-5-services.md (Deel C).
+#
+# Vaultwarden requires HTTPS for the web vault, WebAuthn and mobile clients.
+# Reach it over the tailnet via Tailscale Serve (trusted TLS) — DOMAIN must be
+# the https URL clients actually use.
+
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+    environment:
+      # postgresql://USER:PASSWORD@HOST:5432/DBNAME  (CT 100 over the LAN)
+      DATABASE_URL: "postgresql://vaultwarden:${VAULTWARDEN_DB_PASSWORD:?set in .env}@192.168.1.20:5432/vaultwarden"
+      # Public https URL clients use (e.g. https://vault.<tailnet>.ts.net).
+      DOMAIN: "${VAULTWARDEN_DOMAIN:?set in .env}"
+      # Disable open registration; invite users from the admin page instead.
+      SIGNUPS_ALLOWED: "false"
+      # Argon2 hash of the admin token. Generate: docker run --rm vaultwarden/server /vaultwarden hash
+      ADMIN_TOKEN: "${VAULTWARDEN_ADMIN_TOKEN:?set in .env}"
+    volumes:
+      - vaultwarden-data:/data
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.vaultwarden.rule=Host(`${VAULTWARDEN_HOST:?set in .env}`)"
+      - "traefik.http.routers.vaultwarden.entrypoints=web"
+      - "traefik.http.routers.vaultwarden.middlewares=security-headers@file"
+      - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
+
+volumes:
+  vaultwarden-data:
+
+networks:
+  proxy:
+    external: true

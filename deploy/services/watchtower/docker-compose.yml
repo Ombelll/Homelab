@@ -1,0 +1,55 @@
+# Watchtower — automatic container image updates.
+#
+# Run from this dir:  docker compose up -d
+#
+# Watchtower needs WRITE access to Docker (it recreates containers), so unlike
+# Traefik it can't be fully read-only. To still avoid handing it the raw
+# root-equivalent socket, it talks to its OWN scoped docker-socket-proxy that
+# allows only container/image lifecycle endpoints + POST — not exec, not the
+# host info/secrets surface.
+#
+# It only updates containers that opt in with the label
+#   com.centurylinklabs.watchtower.enable=true
+# so an update can't surprise a service you wanted pinned.
+
+services:
+  watchtower-socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: watchtower-socket-proxy
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      IMAGES: 1
+      # POST is required for create/start/stop/remove during an update.
+      POST: 1
+      # Keep the rest of the API surface denied.
+      EXEC: 0
+      VOLUMES: 0
+      NETWORKS: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - wt-socket
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    restart: unless-stopped
+    depends_on:
+      - watchtower-socket-proxy
+    environment:
+      DOCKER_HOST: "tcp://watchtower-socket-proxy:2375"
+      # Only touch labelled containers.
+      WATCHTOWER_LABEL_ENABLE: "true"
+      # Remove old images after a successful update.
+      WATCHTOWER_CLEANUP: "true"
+      # Check daily at 04:00 (after the 03:00 Proxmox backup window).
+      WATCHTOWER_SCHEDULE: "0 0 4 * * *"
+      # Don't update Watchtower itself in-place mid-run.
+      WATCHTOWER_NO_RESTART: "false"
+    networks:
+      - wt-socket
+
+networks:
+  wt-socket:
+    internal: true

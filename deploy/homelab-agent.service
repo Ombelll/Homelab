@@ -6,6 +6,10 @@ Documentation=https://github.com/Ombelll/Homelab/blob/main/AGENTS.md
 # Proxmox host itself) so we don't fail if it's absent.
 After=network-online.target docker.service
 Wants=network-online.target
+# Crash-loop guard. These directives belong in [Unit], not [Service] —
+# systemd silently ignores StartLimit* placed under [Service].
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -19,12 +23,10 @@ ExecStart=/usr/bin/node dist/index.js
 # file is world-readable). install-agent.sh writes it.
 EnvironmentFile=/etc/homelab-agent.env
 
-# Restart forever with a small backoff; never give up. StartLimit* prevents a
-# crash-loop from hammering the dashboard if config is broken.
+# Restart forever with a small backoff; never give up. (The crash-loop limit
+# itself lives under [Unit] above — StartLimit* is ignored under [Service].)
 Restart=always
 RestartSec=5
-StartLimitIntervalSec=60
-StartLimitBurst=5
 
 # Logs go to the journal; view with: journalctl -u homelab-agent -f
 StandardOutput=journal

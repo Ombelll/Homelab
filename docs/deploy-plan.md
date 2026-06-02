@@ -405,6 +405,11 @@ ziet realtime CPU/RAM/disk grafiek van de host zelf.
 **Doel:** services die je dagelijks gebruikt. Met 16 GB RAM kun je deze
 allemaal in week 1 erbij zetten — geen reden om verdeeld over 4 weken te wachten.
 
+> **Uitgewerkt:** zie [`deploy/fase-5-services.md`](../deploy/fase-5-services.md)
+> voor productie-klare composes (AdGuard, Vaultwarden, Watchtower) met
+> Traefik-labels, Postgres- en DNS-setup, en het routing-model (`*.lan` via
+> AdGuard + tailnet-HTTPS voor Vaultwarden).
+
 | Service | RAM | Database | Waar |
 |---|---|---|---|
 | Homelab Dashboard | 400 MB | SQLite (al gedaan) | Docker LXC |
