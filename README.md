@@ -53,6 +53,12 @@ a job; the agent on the target host polls (or holds a connection open),
 performs the action via the local Docker socket, and reports back. The
 dashboard never gets direct Docker socket access.
 
+## Deployment
+
+Need a step-by-step runbook to deploy this on a Proxmox host with a Docker
+LXC and a shared PostgreSQL LXC? See **[docs/deploy-plan.md](docs/deploy-plan.md)** —
+opinionated, eleven phases, written for a 16 GB mini-PC homelab.
+
 ## Quick start
 
 ```bash
