@@ -24,6 +24,9 @@ async function getData(id: string) {
       disks: { orderBy: { mountpoint: "asc" } },
       sensors: { orderBy: [{ kind: "asc" }, { name: "asc" }] },
       zfsPools: { orderBy: { name: "asc" } },
+      // Latest metric row for the extended gauges (swap, per-core CPU,
+      // process count, failed units) that aren't on the Server snapshot.
+      metrics: { orderBy: { createdAt: "desc" }, take: 1 },
     },
   });
   return server;
@@ -68,6 +71,11 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
   const networkRates = parseJsonField<Array<{ iface: string; rxBps: number; txBps: number }>>(
     server.networkRates,
   );
+  const diskIoRates = parseJsonField<Array<{ device: string; readBps: number; writeBps: number }>>(
+    server.diskIoRates,
+  );
+  const latest = server.metrics[0];
+  const cpuPerCore = parseJsonField<number[]>(latest?.cpuPerCore);
 
   return (
     <>
@@ -102,9 +110,16 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
         }
       />
 
-      {/* System snapshot row: uptime, load, network. Hidden entirely
-          if the agent hasn't reported any of these yet. */}
-      {server.bootAt || loadAvg || networkRates?.length ? (
+      {/* System snapshot row: uptime, load, swap, processes, failed units,
+          network, disk I/O. Hidden entirely if the agent hasn't reported any
+          of these yet. */}
+      {server.bootAt ||
+      loadAvg ||
+      networkRates?.length ||
+      diskIoRates?.length ||
+      latest?.swapPercent != null ||
+      latest?.processCount != null ||
+      latest?.failedUnits != null ? (
         <div className="mb-6 grid gap-2 rounded-xl border border-border bg-card p-3 text-xs sm:grid-cols-3">
           <div>
             <div className="mb-0.5 text-muted-foreground">Uptime</div>
@@ -116,6 +131,28 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
             <div className="mb-0.5 text-muted-foreground">Load average</div>
             <div className="tabular-nums font-medium">
               {loadAvg ? `${loadAvg[0]} · ${loadAvg[1]} · ${loadAvg[2]}` : "—"}
+            </div>
+          </div>
+          <div>
+            <div className="mb-0.5 text-muted-foreground">Swap</div>
+            <div className="tabular-nums font-medium">
+              {latest?.swapPercent != null ? `${latest.swapPercent.toFixed(0)}%` : "—"}
+            </div>
+          </div>
+          <div>
+            <div className="mb-0.5 text-muted-foreground">Processes</div>
+            <div className="tabular-nums font-medium">{latest?.processCount ?? "—"}</div>
+          </div>
+          <div>
+            <div className="mb-0.5 text-muted-foreground">Failed units</div>
+            <div
+              className={
+                latest?.failedUnits && latest.failedUnits > 0
+                  ? "tabular-nums font-medium text-destructive"
+                  : "tabular-nums font-medium"
+              }
+            >
+              {latest?.failedUnits ?? "—"}
             </div>
           </div>
           <div>
@@ -132,6 +169,48 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
                 "—"
               )}
             </div>
+          </div>
+          <div className="sm:col-span-2">
+            <div className="mb-0.5 text-muted-foreground">Disk I/O</div>
+            <div className="space-y-0.5">
+              {diskIoRates && diskIoRates.length > 0 ? (
+                diskIoRates.map((d) => (
+                  <div key={d.device} className="font-medium">
+                    <span className="font-mono text-muted-foreground">{d.device}:</span>{" "}
+                    r {formatBps(d.readBps)} · w {formatBps(d.writeBps)}
+                  </div>
+                ))
+              ) : (
+                "—"
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {cpuPerCore && cpuPerCore.length > 0 ? (
+        <div className="mb-6 rounded-xl border border-border bg-card p-3">
+          <div className="mb-2 text-xs text-muted-foreground">
+            Per-core CPU ({cpuPerCore.length})
+          </div>
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
+            {cpuPerCore.map((pct, i) => {
+              const tone = pct >= 90 ? "bg-destructive" : pct >= 70 ? "bg-warning" : "bg-success";
+              return (
+                <div key={i} title={`core ${i}: ${pct.toFixed(0)}%`}>
+                  <div className="flex items-end justify-between text-[10px] text-muted-foreground">
+                    <span className="font-mono">c{i}</span>
+                    <span className="tabular-nums">{pct.toFixed(0)}</span>
+                  </div>
+                  <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full ${tone}`}
+                      style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : null}
