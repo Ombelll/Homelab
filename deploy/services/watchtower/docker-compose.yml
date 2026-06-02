@@ -14,7 +14,11 @@
 
 services:
   watchtower-socket-proxy:
-    image: tecnativa/docker-socket-proxy:0.3.0
+    # linuxserver's fork is current; tecnativa 0.3.0 is too old for Docker 29+
+    # (its blocked /_ping & /version break the client's API-version handshake,
+    # which then falls back to v1.24 and the daemon rejects it). Same fix as
+    # the Traefik socket-proxy in Fase 4.
+    image: lscr.io/linuxserver/socket-proxy:latest
     container_name: watchtower-socket-proxy
     restart: unless-stopped
     environment:
@@ -22,6 +26,9 @@ services:
       IMAGES: 1
       # POST is required for create/start/stop/remove during an update.
       POST: 1
+      # Allow the version/ping endpoints so the docker client can negotiate.
+      VERSION: 1
+      PING: 1
       # Keep the rest of the API surface denied.
       EXEC: 0
       VOLUMES: 0
@@ -39,6 +46,10 @@ services:
       - watchtower-socket-proxy
     environment:
       DOCKER_HOST: "tcp://watchtower-socket-proxy:2375"
+      # Pin the Docker API version so Watchtower's (older) client doesn't try
+      # to negotiate down to v1.24, which Docker 29+ refuses. Within range
+      # (Engine 29 supports 1.40–1.51).
+      DOCKER_API_VERSION: "1.44"
       # Only touch labelled containers.
       WATCHTOWER_LABEL_ENABLE: "true"
       # Remove old images after a successful update.
