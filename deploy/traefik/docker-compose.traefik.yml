@@ -6,30 +6,63 @@
 #
 # Services join the `proxy` network and opt in with traefik.* labels — see
 # ../docker-compose.labels.yml for the dashboard example.
+#
+# SECURITY: Traefik does NOT mount the raw /var/run/docker.sock. The socket is
+# root-equivalent — anyone who reaches it owns the host. Instead a scoped,
+# read-only docker-socket-proxy sits on an internal network and exposes only
+# the container/network read endpoints Traefik needs. This mirrors the
+# repo-wide rule in AGENTS.md ("the dashboard never touches the Docker socket").
 
 services:
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: traefik-socket-proxy
+    restart: unless-stopped
+    environment:
+      # Read-only access to exactly what the Traefik docker provider reads.
+      CONTAINERS: 1
+      NETWORKS: 1
+      # Everything else stays denied (the image defaults most to 0), and POST
+      # is off so nothing can start/stop/mutate containers through this proxy.
+      POST: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - socket
+    # No published ports: only reachable by Traefik over the internal network.
+
   traefik:
     image: traefik:v3.3
     container_name: traefik
     restart: unless-stopped
+    depends_on:
+      - socket-proxy
     ports:
       - "80:80"
       # Uncomment only on the Let's Encrypt path (TLS terminates at Traefik).
       # On the default Tailscale-Serve path, TLS terminates upstream — leave off.
       # - "443:443"
     volumes:
-      # Read-only docker socket for label discovery. This is the standard
-      # Traefik pattern, but the socket is root-equivalent — see the security
-      # note in fase-4-traefik-https.md for the socket-proxy hardening option.
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # No docker.sock here — Traefik talks to socket-proxy (see traefik.yml).
       - ./traefik.yml:/etc/traefik/traefik.yml:ro
       - ./dynamic.yml:/etc/traefik/dynamic.yml:ro
       # - ./acme:/acme   # Let's Encrypt path: persist issued certs
     networks:
       - proxy
+      - socket
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     # environment:
     #   CF_DNS_API_TOKEN: "${CF_DNS_API_TOKEN}"   # Let's Encrypt DNS-01 path
 
 networks:
   proxy:
     external: true
+  # Internal-only link between Traefik and the socket proxy. `internal: true`
+  # means no container on it can reach (or be reached from) the outside.
+  socket:
+    internal: true

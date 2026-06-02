@@ -16,6 +16,15 @@ http:
         # stsSeconds: 31536000
         # stsIncludeSubdomains: true
 
+    # Reusable rate limiter — opt in per router with
+    # `traefik.http.routers.<name>.middlewares=rate-limit@file`. Protects
+    # exposed services (e.g. anything you publish beyond the tailnet) from
+    # brute-force / runaway clients. Tune to taste.
+    rate-limit:
+      rateLimit:
+        average: 100      # sustained requests/second per source
+        burst: 50         # short spikes allowed above the average
+
     # Basic-auth gate for the Traefik dashboard. Generate a user:hash with:
     #   htpasswd -nbB admin 'your-password'
     # then paste the (escaped) line below.

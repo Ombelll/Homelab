@@ -117,16 +117,26 @@ staan de blokken uitge-comment klaar:
 
 ---
 
-## Security-noot — docker.sock
+## Security — geen rauwe docker.sock
 
-Traefik mount `/var/run/docker.sock:ro` voor service-discovery. Dat is het
-standaard-patroon, maar de socket is root-equivalent: wie Traefik compromitteert,
-heeft de host. Read-only beperkt schrijfacties maar niet het lezen van secrets
-uit andere containers. Hardening-optie: zet een **socket-proxy**
-(`tecnativa/docker-socket-proxy`) ertussen die alleen de `containers`-API
-read-only doorlaat, en laat Traefik dáár tegen praten i.p.v. de echte socket.
-Voor een homelab achter Tailscale is de kale `:ro`-mount een acceptabel
-startpunt; noteer 't als TODO.
+Traefik raakt de echte `/var/run/docker.sock` **niet** aan. Die socket is
+root-equivalent: wie Traefik compromitteert zou anders de hele host hebben, en
+een read-only mount beschermt nog steeds niet tegen het uitlezen van secrets
+(env vars) van andere containers via de API.
+
+In plaats daarvan draait er een **`docker-socket-proxy`** op een `internal`
+netwerk (`socket`), die alléén de read-endpoints doorlaat die de Traefik
+docker-provider nodig heeft (`CONTAINERS=1`, `NETWORKS=1`) en alle schrijf-calls
+weigert (`POST=0`). Traefik praat tegen `tcp://socket-proxy:2375`; de proxy
+publiceert geen poorten en is van buitenaf onbereikbaar. Dit volgt dezelfde
+regel als de rest van de stack ([AGENTS.md](../AGENTS.md): "the dashboard never
+touches the Docker socket").
+
+**Robuustheid:** de Traefik-container heeft een `healthcheck` (`traefik
+healthcheck --ping` op een interne `:8082`-entrypoint), en logt in JSON
+(`log.format` / `accessLog.format`) zodat een log-shipper of het dashboard het
+later kan parsen. Een herbruikbare `rate-limit@file`-middleware staat klaar in
+`dynamic.yml` voor services die je breder dan de tailnet exposed.
 
 ## Troubleshooting
 

@@ -13,6 +13,11 @@ global:
 entryPoints:
   web:
     address: ":80"
+  # Internal-only entrypoint for the /ping healthcheck (see `ping` below). Not
+  # published in compose, so it's only reachable inside the container for the
+  # `traefik healthcheck` probe.
+  ping:
+    address: ":8082"
   # --- Let's Encrypt path only: terminate TLS at Traefik instead of Tailscale.
   # websecure:
   #   address: ":443"
@@ -20,9 +25,16 @@ entryPoints:
   #     tls:
   #       certResolver: le
 
+# Liveness endpoint used by the compose healthcheck (`traefik healthcheck --ping`).
+ping:
+  entryPoint: ping
+
 providers:
-  # Discover services from Docker labels, but only those that opt in.
+  # Discover services from Docker labels via the scoped socket-proxy — NOT the
+  # raw docker.sock. Only services that opt in (exposedByDefault: false) and
+  # sit on the `proxy` network are routed.
   docker:
+    endpoint: "tcp://socket-proxy:2375"
     exposedByDefault: false
     network: proxy
   # File provider for middlewares and any static routers.
@@ -36,9 +48,12 @@ api:
   dashboard: true
   insecure: false
 
+# JSON logs so the dashboard / a log shipper can parse them later.
 log:
   level: INFO
-accessLog: {}
+  format: json
+accessLog:
+  format: json
 
 # --- Let's Encrypt path only: DNS-01 challenge (no public IP needed).
 # certificatesResolvers:
