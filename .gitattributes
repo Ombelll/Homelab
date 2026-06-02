@@ -1,0 +1,5 @@
+# Shell scripts and systemd units run on Linux — force LF so a Windows
+# checkout never commits CRLF that would break `bad interpreter` on the host.
+*.sh            text eol=lf
+*.service       text eol=lf
+deploy/**       text eol=lf

@@ -309,6 +309,11 @@ services:
 **Doel:** dashboard bereikbaar vanaf je telefoon onderweg, en mini-PC zelf
 rapporteert metrics aan zijn eigen dashboard.
 
+> **Uitgewerkt:** zie [`deploy/fase-3-tailscale-agent.md`](../deploy/fase-3-tailscale-agent.md)
+> voor de productie-versie met een gehardende systemd-unit en een idempotent
+> `install-agent.sh`. De inline unit hieronder is de oorspronkelijke schets
+> (draait `npm run start` via `tsx`); gebruik bij voorkeur het script.
+
 ### Stappen
 
 1. Tailscale installeren **op de Proxmox host** (niet in de LXC):

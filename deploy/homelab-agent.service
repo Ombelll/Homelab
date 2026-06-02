@@ -1,0 +1,51 @@
+[Unit]
+Description=Homelab Control Center agent
+Documentation=https://github.com/Ombelll/Homelab/blob/main/AGENTS.md
+# Wait for the network and for any local Docker daemon to be ready. docker.service
+# is a soft dependency (the agent runs fine on hosts without Docker, e.g. the
+# Proxmox host itself) so we don't fail if it's absent.
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Built JS, not tsx — no TypeScript runtime in production. Run install-agent.sh
+# (or `npm ci && npm run build` in agent/) so that dist/index.js exists.
+WorkingDirectory=/opt/homelab-agent/agent
+ExecStart=/usr/bin/node dist/index.js
+
+# Secrets and config live in a 0600 root-owned file, NOT inline here (the unit
+# file is world-readable). install-agent.sh writes it.
+EnvironmentFile=/etc/homelab-agent.env
+
+# Restart forever with a small backoff; never give up. StartLimit* prevents a
+# crash-loop from hammering the dashboard if config is broken.
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Logs go to the journal; view with: journalctl -u homelab-agent -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=homelab-agent
+
+# --- Hardening -------------------------------------------------------------
+# The agent runs as root on the Proxmox host because it reads `zpool status`
+# and hwmon sensors. These directives shrink the blast radius without breaking
+# those reads (verified against zpool / df / docker CLI access).
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+LockPersonality=true
+# The agent only makes OUTBOUND connections and never listens, so deny inbound
+# socket families it never needs. (AF_UNIX kept for the docker.sock-less CLI.)
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
