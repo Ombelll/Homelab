@@ -1,0 +1,32 @@
+# Uptime Kuma — self-hosted uptime/health monitoring.
+#
+# Run from this dir:  docker compose up -d
+# No database — state lives in the named volume. Reached at http://uptime.lan
+# via Traefik once AdGuard resolves *.lan → the Docker LXC (Fase 5, Deel B).
+#
+# First run: open http://uptime.lan and create the admin account.
+
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    volumes:
+      - uptime-kuma-data:/app/data
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.uptimekuma.rule=Host(`uptime.lan`)"
+      - "traefik.http.routers.uptimekuma.entrypoints=web"
+      - "traefik.http.routers.uptimekuma.middlewares=security-headers@file"
+      # Uptime Kuma's web UI listens on :3001 inside the container.
+      - "traefik.http.services.uptimekuma.loadbalancer.server.port=3001"
+
+volumes:
+  uptime-kuma-data:
+
+networks:
+  proxy:
+    external: true

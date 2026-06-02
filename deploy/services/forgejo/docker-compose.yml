@@ -1,0 +1,50 @@
+# Forgejo — lightweight self-hosted Git host (Gitea fork).
+#
+# Uses the shared Postgres LXC (CT 100, 192.168.1.20). Create the db/user
+# first (see deploy/fase-6-services.md), set FORGEJO_* in the repo-root .env:
+#   docker compose --env-file ../../../.env -f docker-compose.yml up -d
+# Reached at http://git.lan via Traefik once AdGuard resolves *.lan.
+#
+# App config is supplied via FORGEJO__section__KEY env vars (written into
+# app.ini on boot). INSTALL_LOCK skips the web installer; the first admin is
+# created with the one-off `forgejo admin user create` command in the guide.
+
+services:
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:9
+    container_name: forgejo
+    restart: unless-stopped
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      FORGEJO__database__DB_TYPE: postgres
+      FORGEJO__database__HOST: "192.168.1.20:5432"
+      FORGEJO__database__NAME: forgejo
+      FORGEJO__database__USER: forgejo
+      FORGEJO__database__PASSWD: "${FORGEJO_DB_PASSWORD:?set in .env}"
+      FORGEJO__server__DOMAIN: "${FORGEJO_HOST:?set in .env}"
+      FORGEJO__server__ROOT_URL: "http://${FORGEJO_HOST}/"
+      FORGEJO__server__SSH_PORT: "2222"
+      FORGEJO__service__DISABLE_REGISTRATION: "true"
+      FORGEJO__security__INSTALL_LOCK: "true"
+    volumes:
+      - forgejo-data:/data
+    ports:
+      # Git over SSH (clone/push via ssh://). The web UI stays behind Traefik.
+      - "2222:22"
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.forgejo.rule=Host(`${FORGEJO_HOST}`)"
+      - "traefik.http.routers.forgejo.entrypoints=web"
+      - "traefik.http.routers.forgejo.middlewares=security-headers@file"
+      - "traefik.http.services.forgejo.loadbalancer.server.port=3000"
+
+volumes:
+  forgejo-data:
+
+networks:
+  proxy:
+    external: true

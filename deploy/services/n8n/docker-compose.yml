@@ -1,0 +1,46 @@
+# n8n — workflow automation (Zapier/Make alternative).
+#
+# Uses the shared Postgres LXC (CT 100, 192.168.1.20). Create the db/user
+# first (see deploy/fase-6-services.md), set N8N_* in the repo-root .env, then:
+#   docker compose --env-file ../../../.env -f docker-compose.yml up -d
+# Reached at http://n8n.lan via Traefik once AdGuard resolves *.lan.
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: "192.168.1.20"
+      DB_POSTGRESDB_PORT: "5432"
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: "${N8N_DB_PASSWORD:?set in .env}"
+      # Hostname Traefik routes on; also used to build webhook URLs.
+      N8N_HOST: "${N8N_HOST:?set in .env}"
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: "http://${N8N_HOST}/"
+      GENERIC_TIMEZONE: Europe/Amsterdam
+      # We terminate plain HTTP on the trusted LAN/tailnet behind Traefik, so
+      # don't force the secure-cookie flag (browsers would drop it over HTTP).
+      N8N_SECURE_COOKIE: "false"
+    volumes:
+      - n8n-data:/home/node/.n8n
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.n8n.rule=Host(`${N8N_HOST}`)"
+      - "traefik.http.routers.n8n.entrypoints=web"
+      - "traefik.http.routers.n8n.middlewares=security-headers@file"
+      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+
+volumes:
+  n8n-data:
+
+networks:
+  proxy:
+    external: true
