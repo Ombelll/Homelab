@@ -2,6 +2,7 @@ import { execFile, spawn, type ChildProcessByStdio } from "node:child_process";
 import type { Readable } from "node:stream";
 import { promisify } from "node:util";
 import { config } from "./config.js";
+import { fetchWithTimeout } from "./http.js";
 
 // stdin=ignore (we never write to docker), stdout/stderr=pipe (we read both).
 type StreamProc = ChildProcessByStdio<null, Readable, Readable>;
@@ -45,7 +46,7 @@ async function pollOnce() {
   const url = `${config.dashboardUrl}/api/agent/jobs?hostname=${encodeURIComponent(
     config.hostname,
   )}`;
-  const res = await fetch(url, { headers: { "x-agent-key": config.apiKey } });
+  const res = await fetchWithTimeout(url, { headers: { "x-agent-key": config.apiKey } });
   if (!res.ok) {
     if (res.status === 404) return; // server not yet registered; check-in loop will fix
     throw new Error(`poll -> ${res.status}`);
@@ -169,7 +170,7 @@ async function streamLogs(jobId: string, dockerId: string, tail: number) {
 async function sendChunk(jobId: string, seq: number, lines: string[]): Promise<boolean> {
   try {
     const url = `${config.dashboardUrl}/api/agent/jobs/${encodeURIComponent(jobId)}/chunk`;
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -193,12 +194,18 @@ function clampTail(v: unknown): number {
 
 async function docker(args: string[]) {
   // execFile (not exec) — args are passed as argv, no shell interpolation.
-  return execFileAsync("docker", args, { maxBuffer: 4 * 1024 * 1024 });
+  // timeout: a wedged docker daemon must not hang the poller forever. 60s is
+  // well above a graceful `docker stop` (10s default) so we don't kill valid
+  // slow operations; on timeout execFile sends SIGTERM to the docker process.
+  return execFileAsync("docker", args, {
+    maxBuffer: 4 * 1024 * 1024,
+    timeout: 60_000,
+  });
 }
 
 async function reportResult(jobId: string, status: "done" | "error", result: unknown) {
   const url = `${config.dashboardUrl}/api/agent/jobs/${encodeURIComponent(jobId)}/result`;
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",

@@ -1,8 +1,9 @@
 import { config } from "./config.js";
+import { fetchWithTimeout } from "./http.js";
 
 async function post(path: string, body: unknown) {
   const url = `${config.dashboardUrl}${path}`;
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",

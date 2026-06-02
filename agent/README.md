@@ -45,6 +45,7 @@ behind NAT.
 | `AGENT_API_KEY` | yes | — | Shared secret sent as `X-Agent-Key`. |
 | `AGENT_SERVER_NAME` | no | `os.hostname()` | Friendly name shown in the UI. |
 | `AGENT_INTERVAL_SECONDS` | no | `30` | How often to report metrics. Minimum 5s. |
+| `AGENT_REQUEST_TIMEOUT_SECONDS` | no | `15` | Hard timeout on every outbound HTTP request to the dashboard. Clamped to 2–120s. |
 
 ## Platform support
 

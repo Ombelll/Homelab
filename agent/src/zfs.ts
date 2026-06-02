@@ -40,14 +40,24 @@ export async function getZfsPools(): Promise<ZfsPoolReading[]> {
   }
 }
 
+// Whether zpool exists doesn't change while the agent runs, so probe once and
+// cache it — avoids spawning a `command -v` subprocess on every tick (every
+// 30s) on every host, the vast majority of which have no ZFS at all.
+let zpoolAvailable: boolean | undefined;
+
 async function hasZpool(): Promise<boolean> {
-  if (process.platform !== "linux" && process.platform !== "darwin") return false;
-  try {
-    await execAsync("command -v zpool", { timeout: 5_000 });
-    return true;
-  } catch {
+  if (zpoolAvailable !== undefined) return zpoolAvailable;
+  if (process.platform !== "linux" && process.platform !== "darwin") {
+    zpoolAvailable = false;
     return false;
   }
+  try {
+    await execAsync("command -v zpool", { timeout: 5_000 });
+    zpoolAvailable = true;
+  } catch {
+    zpoolAvailable = false;
+  }
+  return zpoolAvailable;
 }
 
 export function parseLine(line: string): ZfsPoolReading | null {
