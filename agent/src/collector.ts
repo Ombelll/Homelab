@@ -70,7 +70,16 @@ export async function getDiskPercent(): Promise<number> {
  * non-internal IPv4 from the network interfaces.
  */
 export function getIpAddress(): string | undefined {
-  const ifaces = os.networkInterfaces();
+  // os.networkInterfaces() can throw EAFNOSUPPORT (errno 97) on some kernels
+  // when an interface uses an address family libuv doesn't recognise — notably
+  // VPN/tunnel devices like tailscale0/wireguard. Interface enumeration is
+  // best-effort, so never let it crash the check-in.
+  let ifaces: ReturnType<typeof os.networkInterfaces>;
+  try {
+    ifaces = os.networkInterfaces();
+  } catch {
+    return undefined;
+  }
   for (const list of Object.values(ifaces)) {
     for (const iface of list ?? []) {
       if (iface.family === "IPv4" && !iface.internal) return iface.address;
