@@ -21,10 +21,13 @@ services:
     image: lscr.io/linuxserver/socket-proxy:latest
     container_name: watchtower-socket-proxy
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     environment:
       CONTAINERS: 1
       IMAGES: 1
-      # POST is required for create/start/stop/remove during an update.
+      # POST is required for the image pulls Watchtower does to compare digests
+      # (it no longer recreates containers — see WATCHTOWER_MONITOR_ONLY below).
       POST: 1
       # Allow the version/ping endpoints so the docker client can negotiate.
       VERSION: 1
@@ -42,6 +45,8 @@ services:
     image: containrrr/watchtower:latest
     container_name: watchtower
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       - watchtower-socket-proxy
     environment:
@@ -52,6 +57,11 @@ services:
       DOCKER_API_VERSION: "1.44"
       # Only touch labelled containers.
       WATCHTOWER_LABEL_ENABLE: "true"
+      # Monitor-only: detect and report available updates but DON'T pull-and-
+      # recreate automatically. This removes the supply-chain risk of a
+      # malicious upstream :latest being auto-deployed; apply updates manually
+      # (or via the dashboard's "Update agent"/redeploy flow) after review.
+      WATCHTOWER_MONITOR_ONLY: "true"
       # Remove old images after a successful update.
       WATCHTOWER_CLEANUP: "true"
       # Check daily at 04:00 (after the 03:00 Proxmox backup window).

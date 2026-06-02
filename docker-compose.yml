@@ -10,6 +10,12 @@ services:
     image: homelab-control-center:0.1.0
     container_name: homelab-dashboard
     restart: unless-stopped
+    # Hardening: forbid privilege escalation and drop all Linux capabilities —
+    # the dashboard is a plain Node HTTP server on :3000 and needs none.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     ports:
       - "3000:3000"
     environment:

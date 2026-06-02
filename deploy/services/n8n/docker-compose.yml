@@ -10,6 +10,8 @@ services:
     image: docker.n8n.io/n8nio/n8n:latest
     container_name: n8n
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     environment:
       DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: "192.168.1.20"
