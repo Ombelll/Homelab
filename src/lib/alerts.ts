@@ -192,15 +192,24 @@ function formatMessage(
 
 const TEMP_WARNING_C = 85;
 const TEMP_CRITICAL_C = 95;
+// Per-mount fill thresholds. The root fs is already covered by the disk-high
+// metric alert, so the per-mount check skips "/" to avoid a duplicate.
+const MOUNT_WARNING_PCT = 85;
+const MOUNT_CRITICAL_PCT = 95;
 
-type StateType = "zfs-unhealthy" | "temp-high" | "units-failed" | "smart-failed";
+type StateType =
+  | "zfs-unhealthy"
+  | "temp-high"
+  | "units-failed"
+  | "smart-failed"
+  | "disk-mount-high";
 
 export async function evaluateStateAlerts(input: {
   serverId: string;
   serverName: string;
 }): Promise<void> {
   const inMaintenance = await isInMaintenance(input.serverId);
-  const [pools, sensors, latest, smart] = await Promise.all([
+  const [pools, sensors, latest, smart, disks] = await Promise.all([
     prisma.zfsPool.findMany({ where: { serverId: input.serverId } }),
     prisma.sensor.findMany({ where: { serverId: input.serverId, kind: "temperature" } }),
     prisma.metric.findFirst({
@@ -209,12 +218,18 @@ export async function evaluateStateAlerts(input: {
       select: { failedUnits: true },
     }),
     prisma.smartDevice.findMany({ where: { serverId: input.serverId } }),
+    prisma.disk.findMany({ where: { serverId: input.serverId } }),
   ]);
 
   const badPools = pools.filter((p) => p.health.toUpperCase() !== "ONLINE");
   const hotSensors = sensors.filter((s) => s.value >= TEMP_WARNING_C);
   const failedUnits = latest?.failedUnits ?? 0;
   const failingDisks = smart.filter((dv) => !dv.healthy);
+
+  // Per-mount fill, skipping "/" (covered by the disk-high metric alert).
+  const mountPct = (d: { totalBytes: number; usedBytes: number }) =>
+    d.totalBytes > 0 ? (d.usedBytes / d.totalBytes) * 100 : 0;
+  const fullMounts = disks.filter((d) => d.mountpoint !== "/" && mountPct(d) >= MOUNT_WARNING_PCT);
 
   await Promise.all([
     reconcileState({
@@ -255,6 +270,16 @@ export async function evaluateStateAlerts(input: {
       severity: "critical",
       message: `SMART health failing on ${input.serverName}: ${failingDisks
         .map((dv) => dv.device)
+        .join(", ")}`,
+    }),
+    reconcileState({
+      ...input,
+      inMaintenance,
+      type: "disk-mount-high",
+      breaching: fullMounts.length > 0,
+      severity: fullMounts.some((d) => mountPct(d) >= MOUNT_CRITICAL_PCT) ? "critical" : "warning",
+      message: `Filesystem(s) filling up on ${input.serverName}: ${fullMounts
+        .map((d) => `${d.mountpoint} ${mountPct(d).toFixed(0)}%`)
         .join(", ")}`,
     }),
   ]);
