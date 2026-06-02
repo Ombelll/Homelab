@@ -33,6 +33,10 @@ export async function GET(request: Request, { params }: { params: { id: string }
         cpuPercent: true,
         memoryPercent: true,
         diskPercent: true,
+        swapPercent: true,
+        netBps: true,
+        diskBps: true,
+        maxTempC: true,
       },
     });
     return NextResponse.json({
@@ -45,6 +49,10 @@ export async function GET(request: Request, { params }: { params: { id: string }
         cpu: m.cpuPercent,
         memory: m.memoryPercent,
         disk: m.diskPercent,
+        swap: m.swapPercent,
+        net: m.netBps,
+        diskIo: m.diskBps,
+        temp: m.maxTempC,
       })),
     });
   }
@@ -66,6 +74,10 @@ export async function GET(request: Request, { params }: { params: { id: string }
       memoryMax: r.memoryMax,
       disk: r.diskAvg,
       diskMax: r.diskMax,
+      swap: r.swapAvg,
+      net: r.netBpsAvg,
+      diskIo: r.diskBpsAvg,
+      temp: r.tempMax,
       sampleCount: r.sampleCount,
     })),
   });

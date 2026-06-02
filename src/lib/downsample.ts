@@ -35,7 +35,16 @@ export async function downsampleHourly(input?: {
         serverId: s.id,
         createdAt: { gte: windowStart, lt: currentHourStart },
       },
-      select: { cpuPercent: true, memoryPercent: true, diskPercent: true, createdAt: true },
+      select: {
+        cpuPercent: true,
+        memoryPercent: true,
+        diskPercent: true,
+        swapPercent: true,
+        netBps: true,
+        diskBps: true,
+        maxTempC: true,
+        createdAt: true,
+      },
       orderBy: { createdAt: "asc" },
     });
 
@@ -44,7 +53,7 @@ export async function downsampleHourly(input?: {
       const hourStartMs = m.createdAt.getTime() - (m.createdAt.getTime() % HOUR_MS);
       let b = buckets.get(hourStartMs);
       if (!b) {
-        b = { cpuSum: 0, cpuMax: 0, memSum: 0, memMax: 0, diskSum: 0, diskMax: 0, n: 0 };
+        b = newBucket();
         buckets.set(hourStartMs, b);
       }
       b.cpuSum += m.cpuPercent;
@@ -54,6 +63,13 @@ export async function downsampleHourly(input?: {
       if (m.memoryPercent > b.memMax) b.memMax = m.memoryPercent;
       if (m.diskPercent > b.diskMax) b.diskMax = m.diskPercent;
       b.n++;
+      // Nullable extras: average over the samples that actually reported them.
+      accumulate(b.swap, m.swapPercent);
+      accumulate(b.net, m.netBps);
+      accumulate(b.diskBps, m.diskBps);
+      if (m.maxTempC != null && (b.tempMax == null || m.maxTempC > b.tempMax)) {
+        b.tempMax = m.maxTempC;
+      }
     }
 
     for (const [hourStartMs, b] of buckets) {
@@ -65,6 +81,13 @@ export async function downsampleHourly(input?: {
         memoryMax: round2(b.memMax),
         diskAvg: round2(b.diskSum / b.n),
         diskMax: round2(b.diskMax),
+        swapAvg: avg(b.swap),
+        swapMax: max(b.swap),
+        netBpsAvg: avg(b.net),
+        netBpsMax: max(b.net),
+        diskBpsAvg: avg(b.diskBps),
+        diskBpsMax: max(b.diskBps),
+        tempMax: b.tempMax == null ? null : round2(b.tempMax),
         sampleCount: b.n,
       };
       await prisma.metricHourly.upsert({
@@ -81,6 +104,10 @@ export async function downsampleHourly(input?: {
 
 const HOUR_MS = 60 * 60 * 1000;
 
+// Sum + count + running max for a nullable metric, so averages only span the
+// samples that actually carried a value.
+type Agg = { sum: number; n: number; max: number };
+
 type Bucket = {
   cpuSum: number;
   cpuMax: number;
@@ -89,7 +116,42 @@ type Bucket = {
   diskSum: number;
   diskMax: number;
   n: number;
+  swap: Agg;
+  net: Agg;
+  diskBps: Agg;
+  tempMax: number | null;
 };
+
+function newBucket(): Bucket {
+  return {
+    cpuSum: 0,
+    cpuMax: 0,
+    memSum: 0,
+    memMax: 0,
+    diskSum: 0,
+    diskMax: 0,
+    n: 0,
+    swap: { sum: 0, n: 0, max: 0 },
+    net: { sum: 0, n: 0, max: 0 },
+    diskBps: { sum: 0, n: 0, max: 0 },
+    tempMax: null,
+  };
+}
+
+function accumulate(a: Agg, v: number | null | undefined) {
+  if (v == null) return;
+  a.sum += v;
+  a.n++;
+  if (v > a.max) a.max = v;
+}
+
+function avg(a: Agg): number | null {
+  return a.n === 0 ? null : round2(a.sum / a.n);
+}
+
+function max(a: Agg): number | null {
+  return a.n === 0 ? null : round2(a.max);
+}
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;

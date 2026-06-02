@@ -32,6 +32,7 @@ export const AUDIT_ACTIONS = [
   "maintenance.delete",
   "server.update",
   "server.wake",
+  "agent.update",
   "backup.export",
   "backup.restore",
 ] as const;

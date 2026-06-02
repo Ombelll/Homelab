@@ -22,6 +22,7 @@ import {
 import { getNetworkRates } from "./network.js";
 import { getDiskIoRates } from "./diskio.js";
 import { getTopProcesses } from "./processes.js";
+import { getSmartDevices } from "./smart.js";
 import { getZfsPools } from "./zfs.js";
 import { startJobRunner } from "./runner.js";
 
@@ -61,6 +62,7 @@ async function tick() {
     getFailedUnits(), //      10
     getDiskIoRates(), //      11
     getTopProcesses(), //     12
+    getSmartDevices(), //     13
   ]);
   const val = <T>(i: number, fallback: T): T =>
     settled[i].status === "fulfilled"
@@ -82,6 +84,7 @@ async function tick() {
     networkRates: nonEmpty(val(6, [])),
     diskIoRates: nonEmpty(val(11, [])),
     topProcesses: nonEmpty(val(12, [])),
+    smartDevices: nonEmpty(val(13, [])),
     containers: containers ?? undefined,
     disks: nonEmpty(val(4, [])),
     sensors: nonEmpty(val(5, [])),

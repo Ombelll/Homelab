@@ -66,6 +66,16 @@ export const api = {
     networkRates?: Array<{ iface: string; rxBps: number; txBps: number }>;
     diskIoRates?: Array<{ device: string; readBps: number; writeBps: number }>;
     topProcesses?: Array<{ pid: number; name: string; cpuPercent: number; memBytes: number }>;
+    smartDevices?: Array<{
+      device: string;
+      model?: string;
+      serial?: string;
+      healthy: boolean;
+      tempC?: number;
+      powerOnHours?: number;
+      reallocatedSectors?: number;
+      wearPercent?: number;
+    }>;
     containers?: unknown[];
     disks?: unknown[];
     sensors?: unknown[];

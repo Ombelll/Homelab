@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { unauthorized, verifyAgentKey } from "@/lib/auth";
 import { reportSchema } from "@/lib/validation";
-import { evaluateMetricAlerts } from "@/lib/alerts";
+import { evaluateMetricAlerts, evaluateStateAlerts } from "@/lib/alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +47,18 @@ export async function POST(request: Request) {
   const serverId = server.id;
   const status = deriveStatus(d.cpuPercent, d.memoryPercent, d.diskPercent);
 
+  // Scalar aggregates for the time-series charts, derived from the arrays the
+  // agent already sends so we don't have to historise per-iface/-device/-sensor
+  // detail. netBps/diskBps = total throughput; maxTempC = hottest sensor.
+  const netBps = d.networkRates?.length
+    ? d.networkRates.reduce((acc, n) => acc + n.rxBps + n.txBps, 0)
+    : null;
+  const diskBps = d.diskIoRates?.length
+    ? d.diskIoRates.reduce((acc, x) => acc + x.readBps + x.writeBps, 0)
+    : null;
+  const tempValues = d.sensors?.filter((s) => s.kind === "temperature").map((s) => s.value) ?? [];
+  const maxTempC = tempValues.length ? Math.max(...tempValues) : null;
+
   // One transaction so a tick lands atomically.
   const ops: Prisma.PrismaPromise<unknown>[] = [
     prisma.metric.create({
@@ -59,6 +71,9 @@ export async function POST(request: Request) {
         cpuPerCore: d.cpuPerCore ? JSON.stringify(d.cpuPerCore) : null,
         processCount: d.processCount ?? null,
         failedUnits: d.failedUnits ?? null,
+        netBps,
+        diskBps,
+        maxTempC,
       },
     }),
     prisma.server.update({
@@ -172,6 +187,33 @@ export async function POST(request: Request) {
     );
   }
 
+  if (d.smartDevices) {
+    const devices = new Set(d.smartDevices.map((x) => x.device));
+    for (const x of d.smartDevices) {
+      const fields = {
+        model: x.model ?? null,
+        serial: x.serial ?? null,
+        healthy: x.healthy,
+        tempC: x.tempC ?? null,
+        powerOnHours: x.powerOnHours ?? null,
+        reallocatedSectors: x.reallocatedSectors ?? null,
+        wearPercent: x.wearPercent ?? null,
+      };
+      ops.push(
+        prisma.smartDevice.upsert({
+          where: { serverId_device: { serverId, device: x.device } },
+          update: fields,
+          create: { serverId, device: x.device, ...fields },
+        }),
+      );
+    }
+    ops.push(
+      prisma.smartDevice.deleteMany({
+        where: { serverId, device: { notIn: Array.from(devices) } },
+      }),
+    );
+  }
+
   await prisma.$transaction(ops);
 
   await evaluateMetricAlerts({
@@ -180,7 +222,11 @@ export async function POST(request: Request) {
     cpuPercent: d.cpuPercent,
     memoryPercent: d.memoryPercent,
     diskPercent: d.diskPercent,
+    swapPercent: d.swapPercent,
   });
+  // State alerts read the rows we just wrote (ZFS health, sensors, failed
+  // units), so they run after the transaction commits.
+  await evaluateStateAlerts({ serverId, serverName: server.name });
 
   return NextResponse.json({ ok: true, status });
 }

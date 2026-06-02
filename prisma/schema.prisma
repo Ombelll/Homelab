@@ -60,6 +60,34 @@ model Server {
   sensors            Sensor[]
   maintenanceWindows MaintenanceWindow[]
   zfsPools           ZfsPool[]
+  smartDevices       SmartDevice[]
+}
+
+// Physical-disk SMART health snapshot from the agent (smartctl). The agent
+// scans block devices once per tick and upserts here; devices that disappear
+// from the report are deleted (diffed in the API, like Disk/Sensor).
+//
+// healthy mirrors smartctl's overall PASSED/FAILED self-assessment. The rest
+// are best-effort: not every drive/controller exposes every attribute, so all
+// numeric fields are nullable.
+model SmartDevice {
+  id                String   @id @default(cuid())
+  serverId          String
+  device            String   // e.g. /dev/sda, /dev/nvme0n1
+  model             String?
+  serial            String?
+  healthy           Boolean  @default(true)
+  tempC             Float?
+  powerOnHours      Int?
+  reallocatedSectors Int?
+  // SSD/NVMe media wear as a "percentage used" (0 = new, 100 = rated EOL).
+  wearPercent       Int?
+  updatedAt         DateTime @updatedAt
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, device])
+  @@index([serverId])
 }
 
 // ZFS pool health snapshot. The agent reads `zpool list -H` plus
@@ -149,6 +177,13 @@ model Metric {
   cpuPerCore    String?
   processCount  Int?
   failedUnits   Int?
+  // Scalar aggregates derived server-side from the tick's network/disk-I/O
+  // rate arrays and temperature sensors, kept here so they can be charted as
+  // a time series without storing per-iface/per-device/per-sensor history.
+  // netBps/diskBps are total throughput (read+write / rx+tx) in bytes/sec.
+  netBps        Float?
+  diskBps       Float?
+  maxTempC      Float?
   createdAt     DateTime @default(now())
 
   server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
@@ -170,6 +205,15 @@ model MetricHourly {
   memoryMax     Float
   diskAvg       Float
   diskMax       Float
+  // Extended rollups — nullable so existing rows and the first runs after a
+  // schema bump stay valid. Mirror the scalar Metric extras.
+  swapAvg       Float?
+  swapMax       Float?
+  netBpsAvg     Float?
+  netBpsMax     Float?
+  diskBpsAvg    Float?
+  diskBpsMax    Float?
+  tempMax       Float?
   sampleCount   Int
 
   server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)

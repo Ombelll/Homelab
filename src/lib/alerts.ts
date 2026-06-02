@@ -30,20 +30,26 @@ const THRESHOLDS: Record<AlertType, Thresholds> = {
   "cpu-high": { warning: 80, critical: 95 },
   "memory-high": { warning: 85, critical: 95 },
   "disk-high": { warning: 85, critical: 95 },
+  "swap-high": { warning: 60, critical: 90 },
 };
 
-type AlertType = "cpu-high" | "memory-high" | "disk-high";
+type AlertType = "cpu-high" | "memory-high" | "disk-high" | "swap-high";
 
 const HUMAN_LABEL: Record<AlertType, string> = {
   "cpu-high": "CPU",
   "memory-high": "Memory",
   "disk-high": "Disk",
+  "swap-high": "Swap",
 };
 
-const METRIC_FIELD: Record<AlertType, "cpuPercent" | "memoryPercent" | "diskPercent"> = {
+const METRIC_FIELD: Record<
+  AlertType,
+  "cpuPercent" | "memoryPercent" | "diskPercent" | "swapPercent"
+> = {
   "cpu-high": "cpuPercent",
   "memory-high": "memoryPercent",
   "disk-high": "diskPercent",
+  "swap-high": "swapPercent",
 };
 
 export async function evaluateMetricAlerts(input: {
@@ -52,19 +58,35 @@ export async function evaluateMetricAlerts(input: {
   cpuPercent: number;
   memoryPercent: number;
   diskPercent: number;
+  // Swap is optional: hosts without swap (or non-Linux agents) don't report
+  // it, and we must not alert on a missing signal.
+  swapPercent?: number | null;
 }): Promise<void> {
   const inMaintenance = await isInMaintenance(input.serverId);
 
+  // Only evaluate swap when the agent actually reported a value this tick.
+  const types = (Object.keys(THRESHOLDS) as AlertType[]).filter(
+    (t) => t !== "swap-high" || input.swapPercent != null,
+  );
+
   await Promise.all(
-    (Object.keys(THRESHOLDS) as AlertType[]).map((type) =>
-      reconcile({
+    types.map((type) => {
+      const currentValue =
+        type === "cpu-high"
+          ? input.cpuPercent
+          : type === "memory-high"
+            ? input.memoryPercent
+            : type === "disk-high"
+              ? input.diskPercent
+              : (input.swapPercent ?? 0);
+      return reconcile({
         serverId: input.serverId,
         serverName: input.serverName,
         type,
-        currentValue: input[METRIC_FIELD[type]],
+        currentValue,
         inMaintenance,
-      }),
-    ),
+      });
+    }),
   );
 }
 
@@ -159,6 +181,147 @@ function formatMessage(
   return `${HUMAN_LABEL[input.type]} usage on ${input.serverName} is ${input.currentValue.toFixed(
     1,
   )}% (threshold ${threshold}%, ${severity})`;
+}
+
+// --- State-based alerts ----------------------------------------------------
+//
+// Unlike the metric thresholds above, these track a *condition* that's either
+// true or false right now (a pool is degraded, a sensor is too hot, a unit
+// failed) rather than a sustained numeric breach. One alert per (server, type);
+// the message names the offending entities. A single clear reading resolves.
+
+const TEMP_WARNING_C = 85;
+const TEMP_CRITICAL_C = 95;
+
+type StateType = "zfs-unhealthy" | "temp-high" | "units-failed" | "smart-failed";
+
+export async function evaluateStateAlerts(input: {
+  serverId: string;
+  serverName: string;
+}): Promise<void> {
+  const inMaintenance = await isInMaintenance(input.serverId);
+  const [pools, sensors, latest, smart] = await Promise.all([
+    prisma.zfsPool.findMany({ where: { serverId: input.serverId } }),
+    prisma.sensor.findMany({ where: { serverId: input.serverId, kind: "temperature" } }),
+    prisma.metric.findFirst({
+      where: { serverId: input.serverId },
+      orderBy: { createdAt: "desc" },
+      select: { failedUnits: true },
+    }),
+    prisma.smartDevice.findMany({ where: { serverId: input.serverId } }),
+  ]);
+
+  const badPools = pools.filter((p) => p.health.toUpperCase() !== "ONLINE");
+  const hotSensors = sensors.filter((s) => s.value >= TEMP_WARNING_C);
+  const failedUnits = latest?.failedUnits ?? 0;
+  const failingDisks = smart.filter((dv) => !dv.healthy);
+
+  await Promise.all([
+    reconcileState({
+      ...input,
+      inMaintenance,
+      type: "zfs-unhealthy",
+      breaching: badPools.length > 0,
+      severity: "critical",
+      message: `ZFS ${badPools.length === 1 ? "pool" : "pools"} unhealthy on ${
+        input.serverName
+      }: ${badPools.map((p) => `${p.name} (${p.health})`).join(", ")}`,
+    }),
+    reconcileState({
+      ...input,
+      inMaintenance,
+      type: "temp-high",
+      breaching: hotSensors.length > 0,
+      severity: hotSensors.some((s) => s.value >= TEMP_CRITICAL_C) ? "critical" : "warning",
+      message: `High temperature on ${input.serverName}: ${hotSensors
+        .map((s) => `${s.name} ${s.value}°${s.unit || "C"}`)
+        .join(", ")}`,
+    }),
+    reconcileState({
+      ...input,
+      inMaintenance,
+      type: "units-failed",
+      breaching: failedUnits > 0,
+      severity: "warning",
+      message: `${failedUnits} failed systemd unit${failedUnits === 1 ? "" : "s"} on ${
+        input.serverName
+      }`,
+    }),
+    reconcileState({
+      ...input,
+      inMaintenance,
+      type: "smart-failed",
+      breaching: failingDisks.length > 0,
+      severity: "critical",
+      message: `SMART health failing on ${input.serverName}: ${failingDisks
+        .map((dv) => dv.device)
+        .join(", ")}`,
+    }),
+  ]);
+}
+
+async function reconcileState(input: {
+  serverId: string;
+  serverName: string;
+  type: StateType;
+  breaching: boolean;
+  severity: "warning" | "critical";
+  message: string;
+  inMaintenance: boolean;
+}) {
+  const open = await prisma.alert.findFirst({
+    where: { serverId: input.serverId, type: input.type, resolved: false },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!input.breaching) {
+    if (open) {
+      await prisma.alert.update({ where: { id: open.id }, data: { resolved: true } });
+    }
+    return;
+  }
+
+  if (!open) {
+    if (input.inMaintenance) return;
+    const created = await prisma.alert.create({
+      data: {
+        serverId: input.serverId,
+        type: input.type,
+        severity: input.severity,
+        message: input.message,
+      },
+    });
+    void notifyAlert({
+      type: created.type,
+      severity: created.severity,
+      message: created.message,
+      serverName: input.serverName,
+      createdAt: created.createdAt,
+    });
+    return;
+  }
+
+  // Already open: refresh the message (entities may have changed) and notify
+  // only on a genuine upgrade to critical, mirroring the threshold engine's
+  // ack/snooze/maintenance suppression.
+  const upgrade = open.severity !== "critical" && input.severity === "critical";
+  const updated = await prisma.alert.update({
+    where: { id: open.id },
+    data: { severity: input.severity, message: input.message },
+  });
+  if (upgrade) {
+    const acked = updated.acknowledgedAt !== null;
+    const snoozed = updated.snoozedUntil && updated.snoozedUntil > new Date();
+    if (!input.inMaintenance && !acked && !snoozed) {
+      void notifyAlert({
+        type: updated.type,
+        severity: updated.severity,
+        message: updated.message,
+        serverName: input.serverName,
+        createdAt: updated.createdAt,
+      });
+    }
+  }
 }
 
 async function isInMaintenance(serverId: string): Promise<boolean> {

@@ -24,6 +24,7 @@ async function getData(id: string) {
       disks: { orderBy: { mountpoint: "asc" } },
       sensors: { orderBy: [{ kind: "asc" }, { name: "asc" }] },
       zfsPools: { orderBy: { name: "asc" } },
+      smartDevices: { orderBy: { device: "asc" } },
       // Latest metric row for the extended gauges (swap, per-core CPU,
       // process count, failed units) that aren't on the Server snapshot.
       metrics: { orderBy: { createdAt: "desc" }, take: 1 },
@@ -300,6 +301,68 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
                 </li>
               );
             })}
+          </ul>
+        </div>
+      ) : null}
+
+      {server.smartDevices.length > 0 ? (
+        <div className="mt-6 rounded-xl border border-border bg-card p-5">
+          <h2 className="mb-3 text-sm font-semibold">
+            Disk SMART health ({server.smartDevices.length})
+          </h2>
+          <ul className="space-y-3 text-sm">
+            {server.smartDevices.map((dv) => (
+              <li key={dv.id} className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-medium">{dv.device}</span>
+                    <span
+                      className={
+                        dv.healthy
+                          ? "rounded bg-success/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-success"
+                          : "rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-destructive"
+                      }
+                    >
+                      {dv.healthy ? "passed" : "failed"}
+                    </span>
+                  </div>
+                  {dv.model ? (
+                    <div className="truncate text-xs text-muted-foreground">{dv.model}</div>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 flex-wrap justify-end gap-x-4 gap-y-0.5 text-right text-xs tabular-nums text-muted-foreground">
+                  {dv.tempC != null ? (
+                    <span
+                      className={
+                        dv.tempC >= 60 ? "text-warning" : undefined
+                      }
+                      title="Temperature"
+                    >
+                      {dv.tempC}°C
+                    </span>
+                  ) : null}
+                  {dv.wearPercent != null ? (
+                    <span
+                      className={dv.wearPercent >= 80 ? "text-warning" : undefined}
+                      title="Media wear (percentage used)"
+                    >
+                      {dv.wearPercent}% worn
+                    </span>
+                  ) : null}
+                  {dv.reallocatedSectors != null ? (
+                    <span
+                      className={dv.reallocatedSectors > 0 ? "text-warning" : undefined}
+                      title="Reallocated sectors"
+                    >
+                      {dv.reallocatedSectors} realloc
+                    </span>
+                  ) : null}
+                  {dv.powerOnHours != null ? (
+                    <span title="Power-on hours">{dv.powerOnHours.toLocaleString()} h</span>
+                  ) : null}
+                </div>
+              </li>
+            ))}
           </ul>
         </div>
       ) : null}

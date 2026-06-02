@@ -8,6 +8,9 @@ export const JOB_TYPES = [
   "container.restart",
   "container.logs",
   "container.logs.stream",
+  // Host-level: tell the agent to re-run its install script (pull, rebuild,
+  // restart). No dockerId in the payload.
+  "agent.update",
 ] as const;
 export type JobType = (typeof JOB_TYPES)[number];
 

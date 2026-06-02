@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Edit3, Loader2, Power } from "lucide-react";
+import { Check, Edit3, Loader2, Power, RefreshCw } from "lucide-react";
 
 /**
  * Per-server controls visible on the detail page. Only renders for admins.
@@ -24,7 +24,7 @@ export function ServerActions({
   const router = useRouter();
   const [mac, setMac] = useState(initialMac ?? "");
   const [editing, setEditing] = useState(false);
-  const [busy, setBusy] = useState<"save" | "wake" | null>(null);
+  const [busy, setBusy] = useState<"save" | "wake" | "update" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -60,6 +60,22 @@ export function ServerActions({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `wake failed (${res.status})`);
       setSuccess("Magic packet sent. Server should boot within a minute.");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function updateAgent() {
+    setBusy("update");
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch(`/api/servers/${serverId}/update-agent`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `update failed (${res.status})`);
+      setSuccess("Update queued. The agent will pull, rebuild, and restart — back online in ~1 minute.");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -141,6 +157,28 @@ export function ServerActions({
         WoL packets are broadcast on the dashboard host&apos;s LAN. For
         cross-subnet wakes you need a relay on the target&apos;s subnet.
       </p>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
+        <div>
+          <h2 className="text-sm font-semibold">Agent</h2>
+          <p className="text-xs text-muted-foreground">
+            Pull the latest code, rebuild, and restart this host&apos;s agent.
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={busy === "update"}
+          onClick={updateAgent}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:opacity-50"
+        >
+          {busy === "update" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3.5 w-3.5" />
+          )}
+          Update agent
+        </button>
+      </div>
     </div>
   );
 }
