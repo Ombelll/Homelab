@@ -1,0 +1,83 @@
+# Immich — self-hosted photo & video backup (Google Photos alternative).
+#
+# Immich needs Postgres with vector extensions (pgvecto.rs / vectorchord), so
+# it runs its OWN bundled database — it canNOT use the shared vanilla Postgres
+# on CT 100. Redis + the machine-learning service are also part of the stack.
+# Only immich-server is exposed (via Traefik on immich.lan); the rest sit on an
+# internal network.
+#
+# Set IMMICH_* in the repo-root .env, then from the repo root:
+#   docker compose --env-file .env -f deploy/services/immich/docker-compose.yml up -d
+
+services:
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:release
+    container_name: immich-server
+    restart: unless-stopped
+    volumes:
+      # Photo/video library. A named volume lives on the LXC rootfs (32 GB) —
+      # fine to start. For a large library, switch this to a bind mount onto
+      # the `tank` ZFS pool (add a CT mountpoint) and migrate the contents.
+      - immich-upload:/usr/src/app/upload
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      DB_HOSTNAME: immich-postgres
+      DB_USERNAME: immich
+      DB_PASSWORD: "${IMMICH_DB_PASSWORD:?set in .env}"
+      DB_DATABASE_NAME: immich
+      REDIS_HOSTNAME: immich-redis
+    depends_on:
+      - immich-redis
+      - immich-postgres
+    networks:
+      - proxy
+      - immich
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.immich.rule=Host(`immich.lan`)"
+      - "traefik.http.routers.immich.entrypoints=web"
+      - "traefik.http.routers.immich.middlewares=security-headers@file"
+      - "traefik.http.services.immich.loadbalancer.server.port=2283"
+
+  immich-machine-learning:
+    image: ghcr.io/immich-app/immich-machine-learning:release
+    container_name: immich-ml
+    restart: unless-stopped
+    volumes:
+      - immich-model-cache:/cache
+    networks:
+      - immich
+
+  immich-redis:
+    image: docker.io/valkey/valkey:8-bookworm
+    container_name: immich-redis
+    restart: unless-stopped
+    networks:
+      - immich
+
+  immich-postgres:
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.3.0-pgvectors0.2.0
+    container_name: immich-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: immich
+      POSTGRES_PASSWORD: "${IMMICH_DB_PASSWORD:?set in .env}"
+      POSTGRES_DB: immich
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    volumes:
+      - immich-pgdata:/var/lib/postgresql/data
+    networks:
+      - immich
+
+volumes:
+  immich-upload:
+  immich-model-cache:
+  immich-pgdata:
+
+networks:
+  proxy:
+    external: true
+  immich:
+    # Not internal: immich-ml downloads models and the server fetches updates.
+    driver: bridge
