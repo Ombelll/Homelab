@@ -66,10 +66,18 @@ export async function countUsers(): Promise<number> {
 }
 
 export function sessionCookieOptions(expiresAt?: Date) {
+  // A `Secure` cookie is silently dropped by browsers over plain HTTP. On a
+  // LAN-only homelab reached at http://<ip>:3000 that made login appear to do
+  // nothing: the server set the session cookie, the browser discarded it, and
+  // the middleware bounced the user straight back to /login. So derive Secure
+  // from the configured public URL instead of NODE_ENV — set NEXT_PUBLIC_APP_URL
+  // to an https:// address (e.g. behind Tailscale Serve or a reverse proxy) to
+  // turn it on. Defaults to off so a fresh HTTP install just works.
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   return {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: appUrl.startsWith("https://"),
     path: "/",
     expires: expiresAt,
   };
