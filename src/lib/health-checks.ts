@@ -53,7 +53,10 @@ async function runHttp(
       // We don't disable cert validation by default — set it via env or
       // rely on the OS trust store on the dashboard host.
       method: "GET",
-      redirect: "follow",
+      // Don't follow redirects: a probed target could 30x us toward an
+      // internal endpoint (SSRF). A 3xx still counts as "up" below, which is
+      // the right semantics for a reachability check anyway.
+      redirect: "manual",
     });
     const latencyMs = Date.now() - start;
     const ok = expectedStatus != null ? res.status === expectedStatus : res.status >= 200 && res.status < 400;

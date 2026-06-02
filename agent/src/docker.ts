@@ -1,7 +1,16 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+// Run docker with a fixed argv list — NEVER a shell. Mirrors runner.ts: even
+// though every command here is static today, argv form means a value that
+// ever reaches an argument (a container id/name) can't inject shell
+// metacharacters. `command -v docker` is intentionally avoided for the same
+// reason (it needs a shell); we probe with `docker --version` instead.
+function docker(args: string[], maxBuffer = 4 * 1024 * 1024) {
+  return execFileAsync("docker", args, { maxBuffer, timeout: 30_000 });
+}
 
 export type DockerContainer = {
   dockerId: string;
@@ -26,10 +35,7 @@ export async function listDockerContainers(): Promise<DockerContainer[] | null> 
   if (!(await hasDocker())) return null;
 
   try {
-    const { stdout } = await execAsync(
-      'docker ps -a --no-trunc --format "{{json .}}"',
-      { maxBuffer: 4 * 1024 * 1024 },
-    );
+    const { stdout } = await docker(["ps", "-a", "--no-trunc", "--format", "{{json .}}"]);
 
     const base = stdout
       .split("\n")
@@ -81,7 +87,9 @@ export async function listDockerContainers(): Promise<DockerContainer[] | null> 
 
 async function hasDocker(): Promise<boolean> {
   try {
-    await execAsync(process.platform === "win32" ? "where docker" : "command -v docker");
+    // `docker --version` only touches the client binary (no daemon), which is
+    // all we need to decide whether to attempt the rest. argv form, no shell.
+    await docker(["--version"], 256 * 1024);
     return true;
   } catch {
     return false;
@@ -163,9 +171,9 @@ type ContainerStats = {
  */
 async function readRestartCounts(ids: string[]): Promise<Map<string, number>> {
   if (ids.length === 0) return new Map();
-  const { stdout } = await execAsync(
-    `docker inspect --format "{{.Id}} {{.RestartCount}}" ${ids.join(" ")}`,
-    { maxBuffer: 2 * 1024 * 1024 },
+  const { stdout } = await docker(
+    ["inspect", "--format", "{{.Id}} {{.RestartCount}}", ...ids],
+    2 * 1024 * 1024,
   );
   const map = new Map<string, number>();
   for (const line of stdout.split("\n").map((l) => l.trim()).filter(Boolean)) {
@@ -182,10 +190,7 @@ async function readRestartCounts(ids: string[]): Promise<Map<string, number>> {
  * <none> for the digest (locally-built or untagged images).
  */
 async function readImageDigests(): Promise<Map<string, string>> {
-  const { stdout } = await execAsync(
-    'docker images --digests --no-trunc --format "{{json .}}"',
-    { maxBuffer: 4 * 1024 * 1024 },
-  );
+  const { stdout } = await docker(["images", "--digests", "--no-trunc", "--format", "{{json .}}"]);
   const map = new Map<string, string>();
   for (const line of stdout.split("\n").map((l) => l.trim()).filter(Boolean)) {
     try {
@@ -203,10 +208,7 @@ async function readImageDigests(): Promise<Map<string, string>> {
 }
 
 async function readStats(): Promise<Map<string, ContainerStats>> {
-  const { stdout } = await execAsync(
-    'docker stats --no-stream --format "{{json .}}"',
-    { maxBuffer: 4 * 1024 * 1024 },
-  );
+  const { stdout } = await docker(["stats", "--no-stream", "--format", "{{json .}}"]);
   const map = new Map<string, ContainerStats>();
   for (const line of stdout.split("\n").map((l) => l.trim()).filter(Boolean)) {
     try {

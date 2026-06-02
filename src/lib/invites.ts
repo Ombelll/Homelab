@@ -43,6 +43,18 @@ export async function consumeInvite(rawToken: string): Promise<ConsumeResult> {
   return { ok: true, invite };
 }
 
-export async function markInviteUsed(id: string) {
-  await prisma.invite.update({ where: { id }, data: { usedAt: new Date() } });
+/**
+ * Atomically claim an invite: flip usedAt only if it's still null, in a single
+ * conditional UPDATE. Returns true for the caller that won the race, false for
+ * everyone else. This is what makes a single-use invite truly single-use —
+ * consumeInvite() + markInviteUsed() has a check-then-act window where two
+ * concurrent redemptions could both pass the usedAt check and create two
+ * accounts from one token.
+ */
+export async function claimInvite(id: string): Promise<boolean> {
+  const res = await prisma.invite.updateMany({
+    where: { id, usedAt: null },
+    data: { usedAt: new Date() },
+  });
+  return res.count === 1;
 }

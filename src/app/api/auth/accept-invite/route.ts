@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/password";
 import { SESSION_COOKIE, createSession, sessionCookieOptions } from "@/lib/session";
-import { consumeInvite, markInviteUsed } from "@/lib/invites";
+import { consumeInvite, claimInvite } from "@/lib/invites";
 
 export const dynamic = "force-dynamic";
 
@@ -41,17 +41,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "email already in use" }, { status: 409 });
   }
 
-  const passwordHash = await hashPassword(parsed.data.password);
-  const user = await prisma.user.create({
-    data: {
-      email,
-      name: parsed.data.name?.trim() || null,
-      passwordHash,
-      role: result.invite.role === "admin" ? "admin" : "viewer",
-    },
-  });
+  // Atomically claim the invite BEFORE creating the account. If a concurrent
+  // request already claimed this token, we lose the race and stop — so one
+  // single-use invite can never mint two accounts.
+  if (!(await claimInvite(result.invite.id))) {
+    return NextResponse.json({ error: "invite used" }, { status: 400 });
+  }
 
-  await markInviteUsed(result.invite.id);
+  const passwordHash = await hashPassword(parsed.data.password);
+  let user;
+  try {
+    user = await prisma.user.create({
+      data: {
+        email,
+        name: parsed.data.name?.trim() || null,
+        passwordHash,
+        role: result.invite.role === "admin" ? "admin" : "viewer",
+      },
+    });
+  } catch {
+    // Unique-constraint race on email (two signups, same address). The invite
+    // is already spent; surface a clean conflict.
+    return NextResponse.json({ error: "email already in use" }, { status: 409 });
+  }
 
   const { token, expiresAt } = await createSession(user.id);
   cookies().set(SESSION_COOKIE, token, sessionCookieOptions(expiresAt));
