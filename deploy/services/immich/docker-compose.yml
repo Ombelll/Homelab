@@ -17,10 +17,11 @@ services:
     security_opt:
       - no-new-privileges:true
     volumes:
-      # Photo/video library. A named volume lives on the LXC rootfs (32 GB) —
-      # fine to start. For a large library, switch this to a bind mount onto
-      # the `tank` ZFS pool (add a CT mountpoint) and migrate the contents.
-      - immich-upload:/usr/src/app/upload
+      # Photo/video library on the `tank` ZFS pool (224 GB) instead of the
+      # 32 GB LXC rootfs. Backed by the CT 101 bind mountpoint mp0 ->
+      # /mnt/immich (host: tank/immich). See deploy/services/immich for the
+      # one-time setup (zfs create tank/immich + pct set 101 -mp0 ...).
+      - /mnt/immich:/usr/src/app/upload
       - /etc/localtime:/etc/localtime:ro
     environment:
       DB_HOSTNAME: immich-postgres
@@ -79,7 +80,7 @@ services:
       - immich
 
 volumes:
-  immich-upload:
+  # immich-upload is now a host bind mount to tank (see immich-server volumes).
   immich-model-cache:
   immich-pgdata:
 
