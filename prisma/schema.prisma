@@ -233,6 +233,11 @@ model Container {
   image     String
   status    String
 
+  // Docker healthcheck state parsed from `docker ps` ("healthy" | "unhealthy"
+  // | "starting"). NULL when the image declares no HEALTHCHECK. An "unhealthy"
+  // value (or a "restarting" status) raises a container-unhealthy alert.
+  health    String?
+
   // Image digest tracking for "update available" notifications. The agent
   // reads `ImageID` (the local sha256) from `docker inspect`; a separate
   // sweep fetches the remote manifest digest and flips updateAvailable.
@@ -339,6 +344,9 @@ model HealthCheck {
   lastCheckedAt   DateTime?
   lastError       String?
   consecutiveDown Int       @default(0)
+  // For type "tls": the peer certificate's notAfter. Used to alert ahead of
+  // expiry. NULL for non-tls checks or when never probed.
+  certExpiresAt   DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }

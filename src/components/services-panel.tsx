@@ -18,6 +18,7 @@ type Check = {
   lastLatencyMs: number | null;
   lastCheckedAt: string | null;
   lastError: string | null;
+  certExpiresAt: string | null;
 };
 
 export function ServicesPanel({
@@ -127,7 +128,12 @@ export function ServicesPanel({
                   <tr key={c.id} className={cn("hover:bg-muted/20", !c.enabled && "opacity-60")}>
                     <Td className="font-medium">{c.name}</Td>
                     <Td><span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] uppercase">{c.type}</span></Td>
-                    <Td className="font-mono text-xs text-muted-foreground">{c.target}</Td>
+                    <Td className="font-mono text-xs text-muted-foreground">
+                      {c.target}
+                      {c.type === "tls" && c.certExpiresAt ? (
+                        <CertExpiry iso={c.certExpiresAt} />
+                      ) : null}
+                    </Td>
                     <Td>
                       <span className="inline-flex items-center gap-1.5">
                         <span className={cn("h-1.5 w-1.5 rounded-full", dot)} />
@@ -188,6 +194,16 @@ export function ServicesPanel({
   );
 }
 
+function CertExpiry({ iso }: { iso: string }) {
+  const days = Math.floor((new Date(iso).getTime() - Date.now()) / 86_400_000);
+  const tone = days <= 7 ? "text-destructive" : days <= 21 ? "text-amber-500" : "text-muted-foreground";
+  return (
+    <div className={cn("mt-0.5 text-[11px]", tone)}>
+      cert {days < 0 ? `expired ${-days}d ago` : `expires in ${days}d`}
+    </div>
+  );
+}
+
 function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <th className={cn("px-4 py-3 text-left font-medium", className)}>{children}</th>;
 }
@@ -196,7 +212,7 @@ function Td({ children, className = "" }: { children: React.ReactNode; className
 }
 
 function NewCheckForm({ onCreated }: { onCreated: () => void }) {
-  const [type, setType] = useState<"http" | "tcp" | "ping">("http");
+  const [type, setType] = useState<"http" | "tcp" | "ping" | "tls">("http");
   const [name, setName] = useState("");
   const [target, setTarget] = useState("");
   const [intervalSeconds, setIntervalSeconds] = useState("60");
@@ -243,20 +259,27 @@ function NewCheckForm({ onCreated }: { onCreated: () => void }) {
         <input className={inputClass} required maxLength={64} value={name} onChange={(e) => setName(e.target.value)} />
       </Field>
       <Field label="Type">
-        <select className={inputClass} value={type} onChange={(e) => setType(e.target.value as "http" | "tcp" | "ping")}>
+        <select className={inputClass} value={type} onChange={(e) => setType(e.target.value as "http" | "tcp" | "ping" | "tls")}>
           <option value="http">HTTP/HTTPS</option>
           <option value="tcp">TCP</option>
           <option value="ping">Ping</option>
+          <option value="tls">TLS cert</option>
         </select>
       </Field>
-      <Field label={type === "http" ? "URL" : type === "tcp" ? "host:port" : "host"}>
+      <Field label={type === "http" ? "URL" : type === "tcp" ? "host:port" : type === "tls" ? "host or host:port" : "host"}>
         <input
           className={inputClass}
           required
           value={target}
           onChange={(e) => setTarget(e.target.value)}
           placeholder={
-            type === "http" ? "https://service.lan/health" : type === "tcp" ? "10.0.0.10:5432" : "10.0.0.10"
+            type === "http"
+              ? "https://service.lan/health"
+              : type === "tcp"
+                ? "10.0.0.10:5432"
+                : type === "tls"
+                  ? "service.lan or service.lan:8443"
+                  : "10.0.0.10"
           }
         />
       </Field>

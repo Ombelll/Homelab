@@ -233,9 +233,11 @@ it fine, but downsampling + a daily prune keep long-range queries snappy.
 - ✅ Invite flow for additional users (Settings → Invite users).
 - ✅ Migrated to PostgreSQL (single provider; `prisma db push` on boot).
 - ✅ Optional TOTP 2FA on login (opt-in, with recovery codes).
-- ✅ State alerts: ZFS health, temperature, failed systemd units, SMART, per-mount disk, backup freshness.
+- ✅ State alerts: ZFS health, temperature, failed systemd units, SMART, per-mount disk, backup freshness, unhealthy/restart-looping containers.
 - ✅ SNMP monitoring of a managed switch (Network page).
-- ✅ Offsite backups: rclone-encrypted vzdump mirror to Hetzner (3-2-1).
+- ✅ TLS-certificate expiry checks (health-check type `tls`) with ahead-of-time alerts.
+- ✅ Offsite backups: rclone-encrypted vzdump mirror to Hetzner (3-2-1), with a healthchecks.io dead-man's switch.
+- ✅ Watchdogs: external dashboard-liveness check + monthly automated backup restore-test (`deploy/watchdogs.md`).
 - ✅ Notification integrations: Discord, ntfy, generic JSON webhook, SMTP/email.
 - ✅ Downsampling for the metric table (hourly avg/max per server).
 - ✅ Per-user roles (admin vs. viewer, enforced server-side and in the UI).

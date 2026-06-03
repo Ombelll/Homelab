@@ -107,6 +107,7 @@ export async function POST(request: Request) {
         image: c.image,
         imageDigest: c.imageDigest ?? null,
         status: c.status,
+        health: c.health ?? null,
         ports: JSON.stringify(c.ports),
         composeProject: c.composeProject ?? null,
         composeService: c.composeService ?? null,

@@ -207,14 +207,15 @@ type StateType =
   | "units-failed"
   | "smart-failed"
   | "disk-mount-high"
-  | "backup-stale";
+  | "backup-stale"
+  | "container-unhealthy";
 
 export async function evaluateStateAlerts(input: {
   serverId: string;
   serverName: string;
 }): Promise<void> {
   const inMaintenance = await isInMaintenance(input.serverId);
-  const [pools, sensors, latest, smart, disks, server] = await Promise.all([
+  const [pools, sensors, latest, smart, disks, server, containers] = await Promise.all([
     prisma.zfsPool.findMany({ where: { serverId: input.serverId } }),
     prisma.sensor.findMany({ where: { serverId: input.serverId, kind: "temperature" } }),
     prisma.metric.findFirst({
@@ -228,12 +229,25 @@ export async function evaluateStateAlerts(input: {
       where: { id: input.serverId },
       select: { backupAgeHours: true },
     }),
+    prisma.container.findMany({
+      where: { serverId: input.serverId },
+      select: { name: true, status: true, health: true },
+    }),
   ]);
 
   const badPools = pools.filter((p) => p.health.toUpperCase() !== "ONLINE");
   const hotSensors = sensors.filter((s) => s.value >= TEMP_WARNING_C);
   const failedUnits = latest?.failedUnits ?? 0;
   const failingDisks = smart.filter((dv) => !dv.healthy);
+
+  // A container is "in trouble" when its healthcheck reports unhealthy or it's
+  // stuck restart-looping. We deliberately do NOT alert on "exited"/"created"/
+  // "paused" — those are usually intentional and would be noisy.
+  const badContainers = containers.filter(
+    (c) => c.health === "unhealthy" || c.status === "restarting",
+  );
+  const reason = (c: { status: string; health: string | null }) =>
+    c.health === "unhealthy" ? "unhealthy" : "restarting";
 
   // Per-mount fill, skipping "/" (covered by the disk-high metric alert).
   const mountPct = (d: { totalBytes: number; usedBytes: number }) =>
@@ -305,6 +319,16 @@ export async function evaluateStateAlerts(input: {
       message: `Backups stale on ${input.serverName}: newest is ${
         server?.backupAgeHours ?? "?"
       }h old`,
+    }),
+    reconcileState({
+      ...input,
+      inMaintenance,
+      type: "container-unhealthy",
+      breaching: badContainers.length > 0,
+      severity: "warning",
+      message: `Container issue${badContainers.length === 1 ? "" : "s"} on ${
+        input.serverName
+      }: ${badContainers.map((c) => `${c.name} (${reason(c)})`).join(", ")}`,
     }),
   ]);
 }

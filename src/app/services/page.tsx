@@ -15,7 +15,7 @@ export default async function ServicesPage() {
     <>
       <PageHeader
         title="Services"
-        description="External service-level health probes. HTTP, TCP, and ping. The runner picks up due checks every minute."
+        description="External service-level health probes — HTTP, TCP, ping, and TLS-cert expiry. The runner picks up due checks every minute."
       />
       <ServicesPanel
         initialChecks={checks.map((c) => ({
@@ -31,6 +31,7 @@ export default async function ServicesPage() {
           lastLatencyMs: c.lastLatencyMs,
           lastCheckedAt: c.lastCheckedAt?.toISOString() ?? null,
           lastError: c.lastError,
+          certExpiresAt: c.certExpiresAt?.toISOString() ?? null,
         }))}
         canEdit={canEdit}
       />

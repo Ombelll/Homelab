@@ -18,6 +18,9 @@ export type DockerContainer = {
   image: string;
   imageDigest?: string;
   status: string;
+  // Docker healthcheck state ("healthy" | "unhealthy" | "starting"), parsed
+  // from the human Status string. Undefined when the image has no HEALTHCHECK.
+  health?: string;
   ports: Array<{ host?: string; container: string; protocol?: string }>;
   composeProject?: string;
   composeService?: string;
@@ -105,6 +108,7 @@ function parseDockerLine(line: string): DockerContainer | null {
       name: row.Names ?? row.Name ?? "",
       image: row.Image ?? "",
       status: normalizeStatus(row.State ?? row.Status ?? "unknown"),
+      health: parseHealth(row.Status ?? ""),
       ports: parsePorts(row.Ports ?? ""),
       composeProject: project,
       composeService: service,
@@ -112,6 +116,20 @@ function parseDockerLine(line: string): DockerContainer | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Extract the Docker healthcheck state from the human Status string, e.g.
+ * "Up 2 hours (healthy)" → "healthy", "Up (unhealthy)" → "unhealthy",
+ * "Up (health: starting)" → "starting". Returns undefined when the image
+ * declares no HEALTHCHECK (no parenthetical), so we never invent a value.
+ */
+export function parseHealth(rawStatus: string): string | undefined {
+  const s = rawStatus.toLowerCase();
+  if (s.includes("(healthy)")) return "healthy";
+  if (s.includes("(unhealthy)")) return "unhealthy";
+  if (s.includes("health: starting")) return "starting";
+  return undefined;
 }
 
 export function normalizeStatus(raw: string): string {

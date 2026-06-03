@@ -5,7 +5,7 @@ import { requireAdmin, requireUser } from "@/lib/authz";
 
 export const dynamic = "force-dynamic";
 
-const TYPES = ["http", "tcp", "ping"] as const;
+const TYPES = ["http", "tcp", "ping", "tls"] as const;
 
 const createSchema = z.object({
   name: z.string().min(1).max(64),

@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import net from "node:net";
+import tls from "node:tls";
 import { promisify } from "node:util";
 import { prisma } from "@/lib/prisma";
 import { notifyAlert } from "@/lib/notifications";
@@ -10,10 +11,15 @@ const execFileAsync = promisify(execFile);
 // firing on a single transient failure.
 const ALERT_AFTER_CONSECUTIVE = 2;
 
-export type CheckType = "http" | "tcp" | "ping";
+// Cert-expiry thresholds (days). Warn three weeks out, escalate to critical
+// inside a week — enough lead time to renew a Let's Encrypt / internal CA cert.
+const CERT_WARN_DAYS = 21;
+const CERT_CRIT_DAYS = 7;
+
+export type CheckType = "http" | "tcp" | "ping" | "tls";
 
 export type CheckResult =
-  | { ok: true; latencyMs: number }
+  | { ok: true; latencyMs: number; certExpiresAt?: Date }
   | { ok: false; latencyMs?: number; error: string };
 
 /**
@@ -35,7 +41,49 @@ export async function runProbe(input: {
       return runTcp(input.target, input.timeoutMs);
     case "ping":
       return runPing(input.target, input.timeoutMs);
+    case "tls":
+      return runTls(input.target, input.timeoutMs);
   }
+}
+
+/**
+ * TLS reachability + certificate expiry. target is "host" (defaults to :443)
+ * or "host:port". We open a TLS connection with rejectUnauthorized:false — we
+ * care about the certificate's notAfter, not whether it chains to a trusted CA
+ * (homelab services often use an internal CA or self-signed certs). "up" means
+ * the handshake completed and we read an expiry; the cert-expiry *alert* is
+ * raised separately by the runner based on days remaining.
+ */
+async function runTls(target: string, timeoutMs: number): Promise<CheckResult> {
+  const m = /^([^\s:]+)(?::(\d+))?$/.exec(target.trim());
+  if (!m) return { ok: false, error: 'target must be "host" or "host:port"' };
+  const host = m[1];
+  const port = m[2] ? Number(m[2]) : 443;
+
+  const start = Date.now();
+  return await new Promise<CheckResult>((resolve) => {
+    let settled = false;
+    const finish = (result: CheckResult) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(result);
+    };
+    const socket = tls.connect(
+      { host, port, servername: host, rejectUnauthorized: false, timeout: timeoutMs },
+      () => {
+        const cert = socket.getPeerCertificate();
+        if (!cert || !cert.valid_to) return finish({ ok: false, error: "no certificate" });
+        const expires = new Date(cert.valid_to);
+        if (Number.isNaN(expires.getTime())) {
+          return finish({ ok: false, error: "unparseable cert expiry" });
+        }
+        finish({ ok: true, latencyMs: Date.now() - start, certExpiresAt: expires });
+      },
+    );
+    socket.setTimeout(timeoutMs, () => finish({ ok: false, error: "timeout" }));
+    socket.once("error", (err) => finish({ ok: false, error: err.message }));
+  });
 }
 
 async function runHttp(
@@ -147,6 +195,8 @@ export async function runDueChecks(): Promise<{ ran: number; flipped: number }> 
     const nextStatus = result.ok ? "up" : "down";
     const consecutiveDown = result.ok ? 0 : c.consecutiveDown + 1;
 
+    const certExpiresAt = result.ok && result.certExpiresAt ? result.certExpiresAt : undefined;
+
     await prisma.healthCheck.update({
       where: { id: c.id },
       data: {
@@ -155,8 +205,17 @@ export async function runDueChecks(): Promise<{ ran: number; flipped: number }> 
         lastLatencyMs: result.latencyMs ?? null,
         lastError: result.ok ? null : result.error,
         consecutiveDown,
+        // Only overwrite when we actually read a fresh expiry (tls probe that
+        // succeeded); a failed probe keeps the last known value.
+        ...(certExpiresAt ? { certExpiresAt } : {}),
       },
     });
+
+    // Certificate-expiry alert (tls checks only), independent of up/down: a
+    // service can be perfectly reachable while its cert is days from expiring.
+    if (c.type === "tls" && certExpiresAt) {
+      flipped += await reconcileCertExpiry(c.name, certExpiresAt);
+    }
 
     // Alert lifecycle: open after N consecutive downs, resolve on first up.
     if (!result.ok && consecutiveDown === ALERT_AFTER_CONSECUTIVE && prevStatus !== "down") {
@@ -190,4 +249,55 @@ export async function runDueChecks(): Promise<{ ran: number; flipped: number }> 
   }
 
   return { ran, flipped };
+}
+
+/**
+ * Open/upgrade/resolve a "cert-expiring" alert for a tls check based on the
+ * days left until the certificate expires. Service-scoped (serverId null),
+ * matched by name like the up/down alerts. Returns 1 if it changed state.
+ */
+async function reconcileCertExpiry(name: string, expiresAt: Date): Promise<number> {
+  const daysLeft = Math.floor((expiresAt.getTime() - Date.now()) / 86_400_000);
+  const breaching = daysLeft <= CERT_WARN_DAYS;
+  const severity = daysLeft <= CERT_CRIT_DAYS ? "critical" : "warning";
+
+  const open = await prisma.alert.findFirst({
+    where: { resolved: false, type: "cert-expiring", message: { contains: name } },
+  });
+
+  if (!breaching) {
+    if (open) {
+      await prisma.alert.update({ where: { id: open.id }, data: { resolved: true } });
+      return 1;
+    }
+    return 0;
+  }
+
+  const message =
+    daysLeft < 0
+      ? `TLS certificate for ${name} has EXPIRED (${-daysLeft}d ago)`
+      : `TLS certificate for ${name} expires in ${daysLeft}d`;
+
+  if (!open) {
+    const created = await prisma.alert.create({
+      data: { serverId: null, type: "cert-expiring", severity, message },
+    });
+    void notifyAlert({
+      type: created.type,
+      severity: created.severity,
+      message: created.message,
+      serverName: name,
+      createdAt: created.createdAt,
+    });
+    return 1;
+  }
+
+  // Refresh the message; notify only on a genuine upgrade to critical.
+  const upgrade = open.severity !== "critical" && severity === "critical";
+  await prisma.alert.update({ where: { id: open.id }, data: { severity, message } });
+  if (upgrade) {
+    void notifyAlert({ type: "cert-expiring", severity, message, serverName: name, createdAt: open.createdAt });
+    return 1;
+  }
+  return 0;
 }

@@ -75,9 +75,11 @@ backups.
 ## Monitoring
 
 - **Agent** (`agent/`) on every host → reports CPU/mem/disk/swap/net/disk-IO/ZFS/sensors/top-processes/SMART/containers to `/api/agent/report`. Self-update via a dashboard job. Windows via `install-agent.ps1`, Linux via `install-agent.sh`.
-- **Alerts** — thresholds (CPU/mem/disk/swap) + state alerts (ZFS health, temperature, failed units, SMART, per-mount disk-full) → push via **ntfy**.
+- **Alerts** — thresholds (CPU/mem/disk/swap) + state alerts (ZFS health, temperature, failed units, SMART, per-mount disk-full, backup-stale, unhealthy/restart-looping containers) → push via **ntfy**.
 - **SNMP** — switch monitoring built and dormant; activate by setting `AGENT_SNMP_TARGET` when the managed switch arrives.
+- **Health checks** — service probes (HTTP/TCP/ping) plus `tls` cert-expiry checks that alert ahead of expiry.
 - **Maintenance jobs** — `/api/internal/{downsample,retention,sweep,run-health-checks,check-image-updates}` driven by a scheduler (cron on CT 101) with `SWEEP_KEY`.
+- **Watchdogs** — external dead-man's switches via healthchecks.io: a CT 101 dashboard-liveness ping (so the alerter's own death is noticed) and a monthly backup restore-test on the host (`deploy/watchdogs.md`).
 
 ## Security hardening
 

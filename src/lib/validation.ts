@@ -59,6 +59,7 @@ export const containerInputSchema = z.object({
   image: z.string().min(1),
   imageDigest: z.string().max(255).optional(),
   status: z.string().min(1),
+  health: z.string().max(32).optional(),
   ports: z.array(containerPortSchema).default([]),
   composeProject: z.string().max(255).optional(),
   composeService: z.string().max(255).optional(),

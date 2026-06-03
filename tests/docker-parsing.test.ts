@@ -2,7 +2,21 @@ import { describe, it, expect } from "vitest";
 // Pure-function parsers from the agent. Imported by relative path because the
 // agent is a separate package with its own tsconfig — the test runner picks
 // them up via the source file directly.
-import { normalizeStatus, parsePorts } from "../agent/src/docker";
+import { normalizeStatus, parsePorts, parseHealth } from "../agent/src/docker";
+
+describe("parseHealth", () => {
+  it("extracts the healthcheck state from the Status string", () => {
+    expect(parseHealth("Up 2 hours (healthy)")).toBe("healthy");
+    expect(parseHealth("Up 5 minutes (unhealthy)")).toBe("unhealthy");
+    expect(parseHealth("Up Less than a second (health: starting)")).toBe("starting");
+  });
+
+  it("returns undefined when the image has no healthcheck", () => {
+    expect(parseHealth("Up 2 hours")).toBeUndefined();
+    expect(parseHealth("Exited (0) 1 minute ago")).toBeUndefined();
+    expect(parseHealth("")).toBeUndefined();
+  });
+});
 
 describe("normalizeStatus", () => {
   it("maps 'Up 5 minutes' → 'running'", () => {
