@@ -2,9 +2,11 @@ import { defineConfig } from "vitest/config";
 import path from "node:path";
 
 // Separate config so `npm test` stays fast and unit-only. Integration tests
-// use a real SQLite DB and the actual Prisma client; they cost ~1s each.
+// use a real Postgres DB (a throwaway schema, see tests/integration/setup.ts)
+// and the actual Prisma client.
 //
-// Run with:  npm run test:integration
+// Run with:  TEST_DATABASE_URL=postgresql://user:pass@host:5432/db npm run test:integration
+// Without a Postgres URL the suite skips itself cleanly.
 export default defineConfig({
   test: {
     include: ["tests/integration/**/*.test.ts"],

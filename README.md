@@ -111,43 +111,30 @@ Docker is installed) every 30 seconds.
 
 ### Run with Docker Compose
 
-**SQLite (default):**
+The dashboard runs on Postgres. Point `DATABASE_URL` at your database and
+bring up the stack:
 
 ```bash
 cp .env.example .env
-# set AGENT_API_KEY
+# set AGENT_API_KEY and DATABASE_URL (postgresql://user:pass@host:5432/dbname)
 docker compose up -d --build
 ```
 
-The database file lives in the `homelab-data` named volume. To start fresh,
-`docker compose down -v`.
-
-**Postgres:**
-
-```bash
-cp .env.example .env
-# set AGENT_API_KEY and POSTGRES_PASSWORD; set DATABASE_URL to a postgres URL
-docker compose -f docker-compose.postgres.yml up -d --build
-```
-
-This brings up a `postgres:16-alpine` sidecar and a Postgres-flavoured
-dashboard image. The schema is generated at build time from the SQLite
-source-of-truth (`prisma/schema.prisma`) by swapping the provider — see
-`scripts/gen-postgres-schema.mjs`. For local development against Postgres:
-
-```bash
-npm run db:postgres:push   # syncs schema.postgres.prisma + pushes
-npm run db:postgres:generate
-```
+On boot the container runs `prisma db push`, so the schema is created/updated
+automatically. In this homelab the Postgres instance lives in CT 100 and the
+dashboard runs in CT 101.
 
 ## Tests
 
-Two suites — fast pure-function tests and slower integration tests that hit
-a real (temp) SQLite via Prisma.
+Two suites — fast pure-function tests and slower integration tests that hit a
+real Postgres via Prisma. The integration harness carves out a throwaway
+schema (dropped on teardown), so it never touches real data.
 
 ```bash
 npm test                  # unit + pure-function tests (~5s)
-npm run test:integration  # spins a temp DB, exercises alerts + jobs + auth (~10s)
+
+# Integration tests need a Postgres URL. Without one they skip cleanly.
+TEST_DATABASE_URL=postgresql://user:pass@host:5432/dbname npm run test:integration
 ```
 
 Both run on every push via GitHub Actions; the badge above tracks main.

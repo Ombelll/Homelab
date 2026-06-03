@@ -35,7 +35,7 @@ async function openCpuAlerts(serverId: string) {
   });
 }
 
-describe("alert engine (integration)", () => {
+describe.skipIf(process.env.INTEGRATION_DB_READY !== "1")("alert engine (integration)", () => {
   beforeEach(reset);
   afterAll(async () => {
     await reset();

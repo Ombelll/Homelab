@@ -1,7 +1,6 @@
 // Homelab Control Center — Prisma schema
-// SQLite is used for the MVP because it is zero-config and good enough for a
-// homelab dashboard. To migrate to Postgres later: change `provider` to
-// "postgresql" and re-run `prisma migrate dev`.
+// Runs on Postgres (migrated from SQLite). The database lives in CT 100 and
+// the connection string comes from DATABASE_URL.
 
 generator client {
   provider = "prisma-client-js"

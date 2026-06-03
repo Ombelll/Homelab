@@ -9,10 +9,26 @@ jobs:
   dashboard:
     runs-on: ubuntu-latest
     env:
-      # Required by Prisma to generate the client. SQLite path is fine for CI.
-      DATABASE_URL: "file:./prisma/ci.db"
+      # App runs on Postgres. The integration harness (tests/integration/setup.ts)
+      # carves out a throwaway schema in this DB and drops it on teardown.
+      DATABASE_URL: "postgresql://homelab:homelab@localhost:5432/homelab_test"
+      TEST_DATABASE_URL: "postgresql://homelab:homelab@localhost:5432/homelab_test"
       # Build-time placeholder; never used by tests.
       AGENT_API_KEY: "ci-placeholder-key-not-a-secret"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: homelab
+          POSTGRES_PASSWORD: homelab
+          POSTGRES_DB: homelab_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U homelab -d homelab_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v6
 

@@ -19,9 +19,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Postgres on CT 100 (set DATABASE_URL in .env). Falls back to the old
-      # local SQLite file if DATABASE_URL is unset, so a bare checkout still runs.
-      DATABASE_URL: "${DATABASE_URL:-file:/data/dev.db}"
+      # Postgres on CT 100 — required (the Prisma provider is postgresql).
+      # Set DATABASE_URL in .env, e.g. postgresql://user:pass@host:5432/dbname.
+      DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL in your .env (postgresql://...)}"
       AGENT_API_KEY: "${AGENT_API_KEY:?set AGENT_API_KEY in your .env}"
       NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:-http://localhost:3000}"
       # Protects the /api/internal/* maintenance endpoints (downsample,
@@ -30,7 +30,8 @@ services:
       SWEEP_KEY: "${SWEEP_KEY:-}"
       NODE_ENV: production
     volumes:
-      # SQLite database lives in a named volume so it survives image rebuilds.
+      # Legacy: held the old SQLite DB before the Postgres migration. Kept
+      # mounted so that pre-migration data isn't lost; unused at runtime now.
       - homelab-data:/data
 
     # SECURITY: we intentionally do NOT mount /var/run/docker.sock here.

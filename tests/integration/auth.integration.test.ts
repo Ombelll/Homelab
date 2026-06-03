@@ -18,7 +18,7 @@ async function reset() {
   ]);
 }
 
-describe("auth (integration)", () => {
+describe.skipIf(process.env.INTEGRATION_DB_READY !== "1")("auth (integration)", () => {
   beforeEach(reset);
   afterAll(async () => {
     await reset();

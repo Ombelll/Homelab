@@ -15,7 +15,7 @@ async function reset() {
   ]);
 }
 
-describe("enqueueJob dedupe (integration)", () => {
+describe.skipIf(process.env.INTEGRATION_DB_READY !== "1")("enqueueJob dedupe (integration)", () => {
   beforeEach(reset);
   afterAll(async () => {
     await reset();
