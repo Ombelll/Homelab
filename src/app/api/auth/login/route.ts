@@ -5,12 +5,15 @@ import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
 import { SESSION_COOKIE, createSession, sessionCookieOptions } from "@/lib/session";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
+import { verifyTotp, consumeRecoveryCode } from "@/lib/totp";
 
 export const dynamic = "force-dynamic";
 
 const schema = z.object({
   email: z.string().email().max(255),
   password: z.string().min(1).max(1024),
+  // Optional second factor — only required for accounts with 2FA enabled.
+  code: z.string().max(20).optional(),
 });
 
 // Always-fake hash to keep response time roughly equal whether the user
@@ -57,6 +60,21 @@ export async function POST(request: Request) {
   const ok = await verifyPassword(parsed.data.password, user?.passwordHash ?? DUMMY_HASH);
   if (!user || !ok) {
     return NextResponse.json({ error: "invalid credentials" }, { status: 401 });
+  }
+
+  // Second factor — only for accounts that opted in (totpEnabled). Accounts
+  // without 2FA log in exactly as before.
+  if (user.totpEnabled) {
+    const code = parsed.data.code?.trim();
+    if (!code) {
+      // Password was correct; the UI should now prompt for the 2FA code.
+      return NextResponse.json({ error: "2fa required", twoFactor: true }, { status: 401 });
+    }
+    const okTotp = user.totpSecret ? verifyTotp(code, user.totpSecret) : false;
+    const okRecovery = okTotp ? false : await consumeRecoveryCode(user.id, user.recoveryCodes, code);
+    if (!okTotp && !okRecovery) {
+      return NextResponse.json({ error: "invalid 2FA code", twoFactor: true }, { status: 401 });
+    }
   }
 
   const { token, expiresAt } = await createSession(user.id);

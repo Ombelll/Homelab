@@ -88,6 +88,36 @@ export async function getFailedUnits(): Promise<number | undefined> {
   }
 }
 
+/**
+ * Age in hours of the newest backup file in AGENT_BACKUP_DIR (default the
+ * Proxmox vzdump dir). Lets the dashboard alert when backups go stale/stop.
+ * Returns undefined when the dir is absent (non-backup hosts) or empty, so
+ * only the host that actually holds backups reports — and thus is the only
+ * one that can trip the backup-stale alert. Linux only.
+ */
+export async function getBackupAgeHours(): Promise<number | undefined> {
+  if (process.platform !== "linux") return undefined;
+  const dir = process.env.AGENT_BACKUP_DIR || "/tank/backups/dump";
+  let entries: string[];
+  try {
+    entries = await fs.readdir(dir);
+  } catch {
+    return undefined; // dir missing → this host doesn't hold backups
+  }
+  let newest = 0;
+  for (const e of entries) {
+    if (!e.startsWith("vzdump")) continue; // backup archives + their logs
+    try {
+      const st = await fs.stat(`${dir}/${e}`);
+      if (st.mtimeMs > newest) newest = st.mtimeMs;
+    } catch {
+      /* file vanished between readdir and stat */
+    }
+  }
+  if (newest === 0) return undefined; // no backups found
+  return Math.round(((Date.now() - newest) / 3_600_000) * 10) / 10;
+}
+
 function round(n: number): number {
   return Math.round(n * 100) / 100;
 }

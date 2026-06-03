@@ -9,6 +9,8 @@ export const AUDIT_ACTIONS = [
   "user.update",
   "user.delete",
   "user.password.change",
+  "user.2fa.enable",
+  "user.2fa.disable",
   "agent-key.create",
   "agent-key.revoke",
   "invite.create",

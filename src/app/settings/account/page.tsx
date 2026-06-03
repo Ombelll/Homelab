@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { getCurrentUser } from "@/lib/session";
+import { prisma } from "@/lib/prisma";
 import { ChangePasswordForm } from "./form";
+import { TwoFactorPanel } from "@/components/two-factor-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +12,11 @@ export const dynamic = "force-dynamic";
 export default async function AccountSettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { totpEnabled: true },
+  });
 
   return (
     <>
@@ -37,6 +44,14 @@ export default async function AccountSettingsPage() {
             (phone, work laptop) will be signed out unless you opt out.
           </p>
           <ChangePasswordForm />
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-5">
+          <h2 className="mb-1 text-sm font-semibold">Two-factor authentication</h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Require a one-time code from your phone in addition to your password at login.
+          </p>
+          <TwoFactorPanel enabled={dbUser?.totpEnabled ?? false} />
         </div>
       </div>
     </>

@@ -8,6 +8,8 @@ export function LoginForm({ next }: { next?: string }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [needCode, setNeedCode] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,10 +21,16 @@ export function LoginForm({ next }: { next?: string }) {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, code: code || undefined }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        if (data.twoFactor) {
+          // Password OK; prompt for the second factor.
+          setNeedCode(true);
+          setError(code ? "Invalid 2FA code — try again." : null);
+          return;
+        }
         throw new Error(data.error || `login failed (${res.status})`);
       }
       router.replace(next || "/dashboard");
@@ -56,6 +64,21 @@ export function LoginForm({ next }: { next?: string }) {
           className={inputClass}
         />
       </Field>
+
+      {needCode ? (
+        <Field label="2FA code">
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            autoFocus
+            placeholder="6-digit code or recovery code"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            className={inputClass}
+          />
+        </Field>
+      ) : null}
 
       {error ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">

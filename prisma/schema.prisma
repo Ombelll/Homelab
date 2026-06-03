@@ -45,6 +45,10 @@ model Server {
   // Top processes by CPU at the last tick — JSON of
   // [{pid, name, cpuPercent, memBytes}]. Latest snapshot only; not historised.
   topProcesses        String?
+  // Age (hours) of the newest local backup the agent found (e.g. newest
+  // vzdump in /tank/backups/dump). Only the host that owns the backups
+  // reports it; drives the backup-stale alert. NULL on hosts without backups.
+  backupAgeHours      Float?
   rebootRequired      Boolean   @default(false)
   rebootRequiredSince DateTime?
 
@@ -376,6 +380,12 @@ model User {
   name         String?
   passwordHash String
   role         String    @default("admin")
+  // Optional TOTP two-factor. totpSecret holds the base32 secret (only set
+  // once 2FA is enabled). recoveryCodes is a JSON array of sha256-hashed
+  // single-use backup codes. Login is unchanged unless totpEnabled is true.
+  totpSecret    String?
+  totpEnabled   Boolean  @default(false)
+  recoveryCodes String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

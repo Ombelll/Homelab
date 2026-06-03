@@ -14,6 +14,7 @@ import { getDisks } from "./disks.js";
 import { getSensors } from "./sensors.js";
 import {
   getBootAt,
+  getBackupAgeHours,
   getFailedUnits,
   getLoadAvg,
   getProcessCount,
@@ -64,6 +65,7 @@ async function tick() {
     getDiskIoRates(), //      11
     getTopProcesses(), //     12
     getSmartDevices(), //     13
+    getBackupAgeHours(), //   14
   ]);
   const val = <T>(i: number, fallback: T): T =>
     settled[i].status === "fulfilled"
@@ -86,6 +88,7 @@ async function tick() {
     diskIoRates: nonEmpty(val(11, [])),
     topProcesses: nonEmpty(val(12, [])),
     smartDevices: nonEmpty(val(13, [])),
+    backupAgeHours: val<number | undefined>(14, undefined),
     containers: containers ?? undefined,
     disks: nonEmpty(val(4, [])),
     sensors: nonEmpty(val(5, [])),

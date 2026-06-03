@@ -196,20 +196,25 @@ const TEMP_CRITICAL_C = 95;
 // metric alert, so the per-mount check skips "/" to avoid a duplicate.
 const MOUNT_WARNING_PCT = 85;
 const MOUNT_CRITICAL_PCT = 95;
+// Backup-staleness thresholds (hours). Backups run daily, so >36h means a day
+// was missed; >72h is multiple days.
+const BACKUP_WARN_HOURS = 36;
+const BACKUP_CRIT_HOURS = 72;
 
 type StateType =
   | "zfs-unhealthy"
   | "temp-high"
   | "units-failed"
   | "smart-failed"
-  | "disk-mount-high";
+  | "disk-mount-high"
+  | "backup-stale";
 
 export async function evaluateStateAlerts(input: {
   serverId: string;
   serverName: string;
 }): Promise<void> {
   const inMaintenance = await isInMaintenance(input.serverId);
-  const [pools, sensors, latest, smart, disks] = await Promise.all([
+  const [pools, sensors, latest, smart, disks, server] = await Promise.all([
     prisma.zfsPool.findMany({ where: { serverId: input.serverId } }),
     prisma.sensor.findMany({ where: { serverId: input.serverId, kind: "temperature" } }),
     prisma.metric.findFirst({
@@ -219,6 +224,10 @@ export async function evaluateStateAlerts(input: {
     }),
     prisma.smartDevice.findMany({ where: { serverId: input.serverId } }),
     prisma.disk.findMany({ where: { serverId: input.serverId } }),
+    prisma.server.findUnique({
+      where: { id: input.serverId },
+      select: { backupAgeHours: true },
+    }),
   ]);
 
   const badPools = pools.filter((p) => p.health.toUpperCase() !== "ONLINE");
@@ -281,6 +290,21 @@ export async function evaluateStateAlerts(input: {
       message: `Filesystem(s) filling up on ${input.serverName}: ${fullMounts
         .map((d) => `${d.mountpoint} ${mountPct(d).toFixed(0)}%`)
         .join(", ")}`,
+    }),
+    reconcileState({
+      ...input,
+      inMaintenance,
+      type: "backup-stale",
+      // Only hosts that report a backup age can be stale; null = no backups
+      // here, so never alert.
+      breaching: server?.backupAgeHours != null && server.backupAgeHours >= BACKUP_WARN_HOURS,
+      severity:
+        server?.backupAgeHours != null && server.backupAgeHours >= BACKUP_CRIT_HOURS
+          ? "critical"
+          : "warning",
+      message: `Backups stale on ${input.serverName}: newest is ${
+        server?.backupAgeHours ?? "?"
+      }h old`,
     }),
   ]);
 }

@@ -63,6 +63,7 @@ export const api = {
     cpuPerCore?: number[];
     processCount?: number;
     failedUnits?: number;
+    backupAgeHours?: number;
     networkRates?: Array<{ iface: string; rxBps: number; txBps: number }>;
     diskIoRates?: Array<{ device: string; readBps: number; writeBps: number }>;
     topProcesses?: Array<{ pid: number; name: string; cpuPercent: number; memBytes: number }>;
