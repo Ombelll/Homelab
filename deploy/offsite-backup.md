@@ -53,6 +53,26 @@ If that round-trips "hi", encryption + upload + download all work.
 - `/etc/cron.d/offsite-backup` — daily at 05:00 (after the 03:00 vzdump finishes)
 - Log: `/var/log/offsite-backup.log`
 
+## Dead-man's switch (healthchecks.io)
+
+The script pings a [healthchecks.io](https://healthchecks.io) check: `/start`
+when it begins, success on a clean sync, and `/fail` (with the log tail) on any
+error or skip. If a run never happens — host down, cron broken, rclone wedged —
+no success ping arrives and healthchecks emails you. This catches the failures
+the in-dashboard `backupAgeHours` alert can't (e.g. the whole host being off).
+
+The ping URL is a capability, so it lives **only on the host**, not in git
+(this repo is public). Store it in `/etc/offsite-backup.env`:
+
+```sh
+printf 'HC_PING_URL="https://hc-ping.com/<your-uuid>"\n' > /etc/offsite-backup.env
+chmod 600 /etc/offsite-backup.env
+```
+
+On healthchecks.io, set the check's **period** to 1 day and a **grace** of a
+few hours (the run is 05:00; the 03:00 vzdump must finish first). With no
+`HC_PING_URL` set the pings are simply no-ops.
+
 Kick off the first run manually once configured:
 ```sh
 /usr/local/bin/offsite-backup.sh && tail -n 20 /var/log/offsite-backup.log
@@ -71,4 +91,4 @@ pct restore <newid> /tank/backups/dump/vzdump-lxc-101-XXXX.tar.zst
 - Encryption is client-side (rclone `crypt`); the provider stores only ciphertext with encrypted filenames.
 - 1 TB/month easily holds the ~14-day local retention (~100 GB of vzdumps).
 - To throttle upload on a slow uplink, add `--bwlimit 10M` to the script's rclone line.
-- Consider an offsite freshness check later (alert if the newest offsite object is stale).
+- Run-freshness is covered by the healthchecks.io dead-man's switch above.
