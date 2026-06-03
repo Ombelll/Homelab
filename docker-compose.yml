@@ -24,6 +24,10 @@ services:
       DATABASE_URL: "${DATABASE_URL:-file:/data/dev.db}"
       AGENT_API_KEY: "${AGENT_API_KEY:?set AGENT_API_KEY in your .env}"
       NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:-http://localhost:3000}"
+      # Protects the /api/internal/* maintenance endpoints (downsample,
+      # retention, sweep, health-checks, image-update checks) that the host
+      # cron drives. If unset the endpoints stay open (LAN-reachable), so set it.
+      SWEEP_KEY: "${SWEEP_KEY:-}"
       NODE_ENV: production
     volumes:
       # SQLite database lives in a named volume so it survives image rebuilds.
