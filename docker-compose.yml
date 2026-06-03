@@ -19,7 +19,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: "file:/data/dev.db"
+      # Postgres on CT 100 (set DATABASE_URL in .env). Falls back to the old
+      # local SQLite file if DATABASE_URL is unset, so a bare checkout still runs.
+      DATABASE_URL: "${DATABASE_URL:-file:/data/dev.db}"
       AGENT_API_KEY: "${AGENT_API_KEY:?set AGENT_API_KEY in your .env}"
       NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:-http://localhost:3000}"
       NODE_ENV: production
