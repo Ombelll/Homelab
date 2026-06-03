@@ -4,13 +4,15 @@
 
 A clean, self-hostable web dashboard for monitoring and managing the servers
 and Docker containers in your homelab. Built with Next.js (App Router),
-TypeScript, Tailwind, Prisma + SQLite, and a lightweight Node.js agent.
+TypeScript, Tailwind, Prisma + PostgreSQL, and a lightweight Node.js agent.
 
-> Status: **v1.3**. Auth + RBAC, real container control via a per-host
-> agent, live log streaming, sustained-threshold alerts with Discord / ntfy
-> / webhook / SMTP notifications, metric downsampling, invite flow, health
-> checks, Wake-on-LAN, image update detection, backup/restore, audit log,
-> SQLite or Postgres.
+> Status: **v1.6**. Auth + RBAC with optional TOTP 2FA, real container control
+> via a per-host agent, live log streaming, sustained-threshold and state
+> alerts (CPU/mem/disk/swap + ZFS health, temperature, failed units, SMART,
+> per-mount disk, backup freshness) with Discord / ntfy / webhook / SMTP
+> notifications, metric downsampling + retention, SNMP switch monitoring,
+> invite flow, health checks, Wake-on-LAN, image update detection,
+> backup/restore, audit log. Runs on PostgreSQL.
 
 ## Features
 
@@ -20,24 +22,28 @@ TypeScript, Tailwind, Prisma + SQLite, and a lightweight Node.js agent.
 - Containers page: image, status, ports, host, with start / stop / restart
   and "view logs" actions.
 - Alerts page with severity, source server, and resolution state.
-- Lightweight Node.js agent that collects host metrics and (if Docker is
-  installed) container state, then POSTs to the dashboard with an
+- Lightweight Node.js agent that collects host metrics — CPU/mem/disk/swap,
+  per-disk usage, network + disk-I/O rates, ZFS pool health, hwmon
+  temperatures, top processes, SMART status, backup freshness — and (if Docker
+  is installed) container state, then POSTs to the dashboard with an
   `X-Agent-Key` header.
-- SQLite by default — no database server to run.
+- Optional SNMP polling of a managed switch (interfaces, traffic), shown on a
+  Network page.
+- Runs on PostgreSQL.
 - Dark-mode UI, responsive layout, sidebar navigation.
 
 ## Architecture
 
 ```
-┌────────────────────────┐         POST /api/agent/*           ┌──────────────────┐
+┌────────────────────────┐      POST /api/agent/report         ┌──────────────────┐
 │  homelab-agent (Node)  │  ────────────────────────────────►  │  Next.js routes  │
-│  collects CPU/mem/disk │      X-Agent-Key: <shared>          │  validate & save │
-│  + docker ps           │                                     │  via Prisma      │
-└────────────────────────┘                                     └────────┬─────────┘
+│  metrics + docker ps   │      X-Agent-Key: <shared>          │  validate & save │
+│  + ZFS/SMART/SNMP/…     │  ◄────────────────────────────────  │  via Prisma      │
+└────────────────────────┘      GET /api/agent/jobs (poll)      └────────┬─────────┘
                                                                         │
                                                                         ▼
                                                                 ┌──────────────┐
-                                                                │  SQLite DB   │
+                                                                │ PostgreSQL   │
                                                                 └──────┬───────┘
                                                                         ▼
                                                                 ┌──────────────┐
@@ -48,10 +54,12 @@ TypeScript, Tailwind, Prisma + SQLite, and a lightweight Node.js agent.
                                                                 └──────────────┘
 ```
 
-Container control will eventually flow the other way: the dashboard enqueues
-a job; the agent on the target host polls (or holds a connection open),
-performs the action via the local Docker socket, and reports back. The
-dashboard never gets direct Docker socket access.
+Container control flows the other way without ever giving the dashboard
+Docker socket access: the dashboard enqueues a job, the agent on the target
+host polls `GET /api/agent/jobs`, performs the action via the local Docker CLI,
+and reports the result back. See [`AGENTS.md`](./AGENTS.md) for the full flow.
+For the physical topology (Proxmox host, LXCs, storage, network) see
+[`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 ## Deployment
 
@@ -67,9 +75,12 @@ npm ci
 
 # 2. configure env
 cp .env.example .env
-# edit .env and set a strong AGENT_API_KEY (e.g. `openssl rand -hex 32`)
+# edit .env: set DATABASE_URL to a PostgreSQL URL and a strong AGENT_API_KEY
+# (e.g. `openssl rand -hex 32`). A local Postgres for dev:
+#   docker run -d --name pg -e POSTGRES_PASSWORD=dev -p 5432:5432 postgres:16-alpine
+#   DATABASE_URL="postgresql://postgres:dev@localhost:5432/postgres?schema=public"
 
-# 3. create the database
+# 3. create the schema
 npx prisma db push
 npm run db:seed    # optional — populates demo servers / containers / alerts
 
@@ -143,12 +154,18 @@ Both run on every push via GitHub Actions; the badge above tracks main.
 
 | Var | Where | Description |
 |-----|-------|-------------|
-| `DATABASE_URL` | dashboard | Prisma connection string. Defaults to `file:./prisma/dev.db`. |
+| `DATABASE_URL` | dashboard | PostgreSQL connection string (required), e.g. `postgresql://user:pass@host:5432/db`. |
 | `AGENT_API_KEY` | dashboard + agent | Shared secret sent in the `X-Agent-Key` header. |
 | `NEXT_PUBLIC_APP_URL` | dashboard | Public base URL of the dashboard. |
-| `DASHBOARD_URL` | agent | Base URL the agent posts to. |
+| `SWEEP_KEY` | dashboard | Guards the `/api/internal/*` maintenance endpoints (open if unset). |
+| `TEST_DATABASE_URL` | tests | Postgres URL for the integration suite; without it the suite skips. |
+| `DASHBOARD_URL` | agent | Base URL the agent posts to (use the HTTPS/tailnet URL). |
 | `AGENT_SERVER_NAME` | agent | Friendly name for this host (defaults to hostname). |
-| `AGENT_INTERVAL_SECONDS` | agent | Reporting interval; default `30`. |
+| `AGENT_INTERVAL_SECONDS` | agent | Reporting interval; default `30` (min 5). |
+| `AGENT_REQUEST_TIMEOUT_SECONDS` | agent | Hard timeout per outbound request; default `15` (2–120). |
+| `AGENT_BACKUP_DIR` | agent | Dir scanned for `vzdump*` to report backup age; default `/tank/backups/dump`. |
+| `AGENT_SNMP_TARGET` | agent | IP of a managed switch to poll over SNMP. Dormant unless set. |
+| `AGENT_SNMP_COMMUNITY` | agent | SNMP v2c community; default `public`. |
 
 ## Security notes
 
@@ -163,6 +180,9 @@ Both run on every push via GitHub Actions; the badge above tracks main.
   [`AGENTS.md`](./AGENTS.md).
 - All agent input is validated with Zod before hitting the database.
 - All API responses are JSON and avoid leaking stack traces.
+- **Optional TOTP 2FA.** Enable per-account under Settings → Account; logins
+  then require a code from an authenticator app (recovery codes provided once).
+- Login is rate-limited and passwords are scrypt-hashed.
 
 ## Scheduled maintenance
 
@@ -196,8 +216,8 @@ The downsample job must run before the retention job for any given hour
 margin.
 
 The metric table grows ~1 row per server per agent tick. Without retention a
-30-second interval over 5 hosts produces ~430k rows/month — SQLite will
-handle it, but a daily prune keeps queries snappy.
+30-second interval over 5 hosts produces ~430k rows/month — Postgres handles
+it fine, but downsampling + a daily prune keep long-range queries snappy.
 
 ## Roadmap
 
@@ -211,7 +231,11 @@ handle it, but a daily prune keeps queries snappy.
 - ✅ Retention sweep for metrics, resolved alerts, completed jobs.
 - ✅ Live log streaming (SSE + chunked uploads from agent, with cancel).
 - ✅ Invite flow for additional users (Settings → Invite users).
-- ✅ Postgres support (`docker-compose.postgres.yml` + scripts).
+- ✅ Migrated to PostgreSQL (single provider; `prisma db push` on boot).
+- ✅ Optional TOTP 2FA on login (opt-in, with recovery codes).
+- ✅ State alerts: ZFS health, temperature, failed systemd units, SMART, per-mount disk, backup freshness.
+- ✅ SNMP monitoring of a managed switch (Network page).
+- ✅ Offsite backups: rclone-encrypted vzdump mirror to Hetzner (3-2-1).
 - ✅ Notification integrations: Discord, ntfy, generic JSON webhook, SMTP/email.
 - ✅ Downsampling for the metric table (hourly avg/max per server).
 - ✅ Per-user roles (admin vs. viewer, enforced server-side and in the UI).
@@ -240,9 +264,12 @@ handle it, but a daily prune keeps queries snappy.
 │   ├── components/         # shared React components
 │   └── lib/                # prisma client, auth, validation, utils
 ├── agent/                  # standalone Node.js agent
+├── deploy/                 # deployment runbooks + installers (agent, offsite, NUT)
+├── docs/deploy-plan.md     # opinionated end-to-end Proxmox runbook
 ├── Dockerfile
 ├── docker-compose.yml
-├── AGENTS.md
+├── ARCHITECTURE.md         # physical topology: host, LXCs, storage, network
+├── AGENTS.md               # agent design + Docker control flow
 └── README.md
 ```
 

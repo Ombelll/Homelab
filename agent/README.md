@@ -3,8 +3,23 @@
 Standalone Node.js process that reports host metrics and Docker container
 state to the [Homelab Control Center](../README.md) dashboard.
 
-See the project root [`AGENTS.md`](../AGENTS.md) for the full architecture
-and the planned Docker control flow.
+Each tick it collects CPU (incl. per-core), memory, disk %, swap, per-mount
+disk usage, network + disk-I/O rates, ZFS pool health, hwmon temperatures, top
+processes, failed systemd units, SMART status, backup freshness, and the
+`docker ps` list, then POSTs one unified payload to `/api/agent/report`. It
+also polls the dashboard for container-control jobs and can self-update.
+
+See the project root [`AGENTS.md`](../AGENTS.md) for the full architecture and
+the Docker control flow.
+
+## Install as a service
+
+For real deployments use the installers in [`deploy/`](../deploy) rather than
+running by hand — they set up a `systemd` service (Linux) or a Scheduled Task
+(Windows) and wire in the env:
+
+- **Linux:** `bash deploy/install-agent.sh` (creates the `homelab-agent` systemd service).
+- **Windows:** `deploy/install-agent.ps1` (creates a hidden Scheduled Task at logon, no admin needed).
 
 ## Requirements
 
@@ -46,6 +61,9 @@ behind NAT.
 | `AGENT_SERVER_NAME` | no | `os.hostname()` | Friendly name shown in the UI. |
 | `AGENT_INTERVAL_SECONDS` | no | `30` | How often to report metrics. Minimum 5s. |
 | `AGENT_REQUEST_TIMEOUT_SECONDS` | no | `15` | Hard timeout on every outbound HTTP request to the dashboard. Clamped to 2–120s. |
+| `AGENT_BACKUP_DIR` | no | `/tank/backups/dump` | Linux only. Dir scanned for `vzdump*` archives to report backup freshness. |
+| `AGENT_SNMP_TARGET` | no | — | IP of a managed switch to poll over SNMP v2c. Dormant unless set. |
+| `AGENT_SNMP_COMMUNITY` | no | `public` | SNMP v2c community string. |
 
 ## Platform support
 

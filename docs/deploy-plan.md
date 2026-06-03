@@ -207,8 +207,9 @@ Volgende ochtend om 03:01 check je dat er een snapshot bestaat in `tank`.
 
 ## Fase 1.7 — PostgreSQL shared LXC (15 min)
 
-**Doel:** een centrale Postgres die elke toekomstige app kan gebruiken (Immich,
-n8n, Nextcloud, Outline...). Dashboard houden we op SQLite — overkill om te migreren.
+**Doel:** een centrale Postgres die elke app kan gebruiken (Immich, n8n,
+Nextcloud, Outline...) — inclusief het dashboard zelf, dat inmiddels naar deze
+Postgres is gemigreerd (de `homelab` database).
 
 ### Snelste pad: Community Script
 
@@ -412,7 +413,7 @@ allemaal in week 1 erbij zetten — geen reden om verdeeld over 4 weken te wacht
 
 | Service | RAM | Database | Waar |
 |---|---|---|---|
-| Homelab Dashboard | 400 MB | SQLite (al gedaan) | Docker LXC |
+| Homelab Dashboard | 400 MB | Postgres LXC (CT 100) | Docker LXC |
 | AdGuard Home | 200 MB | ingebouwd | Eigen LXC of Docker |
 | Vaultwarden | 80 MB | Postgres LXC | Docker LXC |
 | Traefik | 100 MB | n.v.t. | Docker LXC |

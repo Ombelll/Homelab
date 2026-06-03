@@ -15,10 +15,20 @@ toward real container control.
 |   agent (Node)  |  ───────────────────────►  |  Next.js dashboard |
 +-----------------+                            +--------------------+
        │
-       ├── on startup: POST /api/agent/checkin   (hostname, name, IP, OS)
-       ├── every tick: POST /api/agent/metrics   (cpu%, mem%, disk%)
-       └── every tick: POST /api/agent/containers (full docker ps list)
+       ├── on startup: POST /api/agent/checkin (hostname, name, IP, OS, boot, load)
+       ├── every tick: POST /api/agent/report  (one unified payload — see below)
+       ├── every tick: POST /api/agent/snmp    (if AGENT_SNMP_TARGET is set)
+       └── every 3s:   GET  /api/agent/jobs    (poll for container actions)
 ```
+
+A single `/api/agent/report` carries everything collected this tick: CPU
+(incl. per-core), memory, disk %, swap, per-disk usage, network + disk-I/O
+rates, ZFS pools, hwmon temperatures, process count, failed systemd units,
+top processes, SMART devices, backup age, and the full `docker ps` list. The
+dashboard validates it with one Zod schema and fans it out to the relevant
+tables. (The older split routes — `/metrics`, `/containers`, `/disks`,
+`/sensors`, `/zfs` — still exist for compatibility but the agent uses the
+unified report.)
 
 The agent **never opens a listening port**. All traffic is outbound to the
 dashboard, which makes it easy to run agents behind NAT, on VPN, or in
@@ -28,11 +38,22 @@ restricted networks.
 
 | File | Purpose |
 |------|---------|
-| `agent/src/index.ts` | Top-level loop: check in, then tick on an interval. |
-| `agent/src/config.ts` | Reads env vars, fails fast on missing required ones. |
-| `agent/src/collector.ts` | Cross-platform CPU / memory / disk / OS / IP collection. |
-| `agent/src/docker.ts` | Detects Docker, runs `docker ps`, parses output. |
-| `agent/src/client.ts` | Thin `fetch` wrapper that injects `X-Agent-Key`. |
+| `agent/src/index.ts` | Top-level loop: check in, tick (collect + report), SNMP, start job runner. |
+| `agent/src/config.ts` | Reads env vars, fails fast on missing required ones; warns on plaintext HTTP. |
+| `agent/src/collector.ts` | Cross-platform CPU (incl. per-core) / memory / disk / swap / OS / IP. |
+| `agent/src/disks.ts` | Per-mount disk usage. |
+| `agent/src/diskio.ts` | Disk-I/O byte rates (delta between ticks). |
+| `agent/src/network.ts` | Per-interface network byte rates. |
+| `agent/src/sensors.ts` | Temperatures via Linux `/sys/class/hwmon` (and Windows WMI). |
+| `agent/src/zfs.ts` | ZFS pool health/usage via `zpool`. |
+| `agent/src/smart.ts` | SMART device health via `smartctl`. |
+| `agent/src/processes.ts` | Top processes by CPU/memory. |
+| `agent/src/system.ts` | Boot time, load avg, failed units, reboot-required, backup age. |
+| `agent/src/snmp.ts` | SNMP v2c polling of a managed switch (IF-MIB). |
+| `agent/src/docker.ts` | Detects Docker, runs `docker ps`, parses output (`execFile`). |
+| `agent/src/runner.ts` | Polls + executes container jobs, posts results. |
+| `agent/src/client.ts` | Thin `fetch` wrapper that injects `X-Agent-Key` (with timeout). |
+| `agent/src/http.ts` | Low-level fetch-with-timeout helper. |
 
 ## Check-in flow
 
@@ -40,22 +61,23 @@ restricted networks.
    environment. If either is missing it exits immediately.
 2. **Check-in.** It POSTs to `/api/agent/checkin` with hostname, friendly
    name (`AGENT_SERVER_NAME` or the system hostname), best-effort outbound
-   IPv4, and an OS description (uses `/etc/os-release` on Linux when present).
-3. **Tick.** Every `AGENT_INTERVAL_SECONDS` (default 30s):
-   - Samples CPU usage by reading `os.cpus()` 1s apart and diffing the idle
-     bucket against the total. This is portable; it just requires a small
-     sleep per sample.
-   - Reads memory from `os.totalmem()` / `os.freemem()`.
-   - Reads disk usage of `/` via `df -kP` (Linux/macOS) or `wmic` (Windows).
-     If neither is available the agent reports `0`.
-   - If `docker` is on PATH, runs `docker ps -a --format "{{json .}}"`,
-     parses each line, and POSTs the full list to `/api/agent/containers`.
-     The dashboard performs a diff and removes containers no longer present.
+   IPv4, an OS description (uses `/etc/os-release` on Linux when present), boot
+   time, load average, and whether a reboot is required.
+3. **Tick.** Every `AGENT_INTERVAL_SECONDS` (default 30s) it collects every
+   metric concurrently with `Promise.allSettled` — so one flaky collector
+   (a slow `df`, a missing `systemctl`) just omits its section instead of
+   dropping the whole tick — then POSTs the combined payload to
+   `/api/agent/report`. The dashboard diffs the container list and removes
+   containers no longer present. If the report gets a `404` (the dashboard
+   doesn't know this host yet), the agent re-checks-in and resends.
 4. **Re-check-in.** Every 15 minutes the agent re-runs the check-in so renamed
    hostnames / new IPs propagate without a restart.
+5. **SNMP (optional).** If `AGENT_SNMP_TARGET` is set, each tick also polls
+   that device over SNMP v2c and POSTs interfaces to `/api/agent/snmp`.
 
 All requests are wrapped in `safeRun()` — a failed tick logs but does not
-crash the agent.
+crash the agent. Every outbound request has a hard timeout
+(`AGENT_REQUEST_TIMEOUT_SECONDS`, default 15s).
 
 ## API authentication
 
@@ -77,8 +99,9 @@ which keys are still in use.
 - Generate with `openssl rand -hex 32`.
 - Treat it like a database password — don't commit it, store it in a secret
   manager or a `.env` file with `0600` perms.
-- Rotate periodically; for now rotation means updating the env var on both
-  ends. Per-agent keys (with overlap windows) are on the roadmap.
+- Rotate periodically. Per-agent keys with revocation already exist (Settings →
+  Agent API keys): mint one key per host, optionally bound to a hostname, and
+  revoke a single agent without touching the others.
 
 ## Docker control flow
 
@@ -113,6 +136,13 @@ Job types currently supported:
 | `container.restart` | `{ dockerId }` | `{ action, dockerId }` |
 | `container.logs` | `{ dockerId, tail }` | `{ lines: string[] }` |
 | `container.logs.stream` | `{ dockerId, tail }` | chunks via separate endpoint (see below) |
+| `agent.update` | `{}` | self-update: `git pull` + rebuild + restart the agent service |
+
+`agent.update` is the agent's self-update path (triggered from Settings →
+Servers). It has no `dockerId`; the agent pulls the latest code, rebuilds, and
+restarts its own service. Because this runs a script as root on the host, the
+agent key it authenticates with must travel over HTTPS — see the plaintext-HTTP
+warning in `config.ts`.
 
 ### Streaming logs
 
@@ -154,8 +184,10 @@ Empty `lines: []` payloads are treated as heartbeats and never written to
 - **Jobs are hostname-scoped.** When an agent posts a result it must include
   its own hostname; the API rejects the result if the job belongs to a
   different host (`/api/agent/jobs/[id]/result` returns 403).
-- **Action allowlist.** Only the four `container.*` types above are
-  understood. Anything else returns an error from the agent runner.
+- **Action allowlist.** Only the job types in the table above are understood
+  (the `container.*` actions plus `agent.update`). Anything else returns an
+  error from the agent runner; the dashboard enqueue path enforces the same
+  allowlist (`src/lib/jobs.ts`).
 - **Inflight jobs are reclaimable.** If an agent crashes mid-job, the
   `inflight` row is reclaimed by the next poller after 60s — no stuck jobs.
 - **Duplicate enqueues collapse.** If a user spam-clicks "stop", we return
