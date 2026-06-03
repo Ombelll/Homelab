@@ -12,7 +12,8 @@
     "start:prod": "node dist/index.js"
   },
   "dependencies": {
-    "dotenv": "^17.4.2"
+    "dotenv": "^17.4.2",
+    "net-snmp": "^3.26.3"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",

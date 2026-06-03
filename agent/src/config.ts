@@ -45,4 +45,10 @@ export const config = {
   requestTimeoutMs:
     Math.max(2, Math.min(120, Number.parseInt(process.env.AGENT_REQUEST_TIMEOUT_SECONDS ?? "15", 10))) *
     1000,
+
+  // Optional SNMP polling of a network device (managed switch). DORMANT unless
+  // AGENT_SNMP_TARGET is set — then this agent polls that IP over SNMP v2c each
+  // tick and reports its interfaces to /api/agent/snmp.
+  snmpTarget: process.env.AGENT_SNMP_TARGET?.trim() || undefined,
+  snmpCommunity: process.env.AGENT_SNMP_COMMUNITY?.trim() || "public",
 };

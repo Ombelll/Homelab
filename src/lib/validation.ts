@@ -146,3 +146,22 @@ export const reportSchema = z.object({
 });
 
 export type ContainerInput = z.infer<typeof containerInputSchema>;
+
+// SNMP report from an agent that polled a network device (managed switch).
+export const snmpPortSchema = z.object({
+  ifIndex: z.number().int().min(0),
+  name: z.string().min(1).max(128),
+  status: z.string().min(1).max(32),
+  rxBps: z.number().min(0).optional(),
+  txBps: z.number().min(0).optional(),
+  inErrors: z.number().int().min(0).optional(),
+  outErrors: z.number().int().min(0).optional(),
+});
+
+export const snmpReportSchema = z.object({
+  host: z.string().min(1).max(255),
+  name: z.string().min(1).max(255),
+  vendor: z.string().max(255).optional(),
+  uptimeSec: z.number().int().min(0).optional(),
+  ports: z.array(snmpPortSchema).max(256),
+});

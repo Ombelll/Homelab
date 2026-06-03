@@ -82,6 +82,23 @@ export const api = {
     zfsPools?: unknown[];
   }) => post("/api/agent/report", payload),
 
+  // SNMP poll of a network device (managed switch).
+  reportSnmp: (payload: {
+    host: string;
+    name: string;
+    vendor?: string;
+    uptimeSec?: number;
+    ports: Array<{
+      ifIndex: number;
+      name: string;
+      status: string;
+      rxBps?: number;
+      txBps?: number;
+      inErrors?: number;
+      outErrors?: number;
+    }>;
+  }) => post("/api/agent/snmp", payload),
+
   metrics: (payload: {
     hostname: string;
     cpuPercent: number;

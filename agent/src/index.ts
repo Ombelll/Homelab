@@ -23,6 +23,7 @@ import { getNetworkRates } from "./network.js";
 import { getDiskIoRates } from "./diskio.js";
 import { getTopProcesses } from "./processes.js";
 import { getSmartDevices } from "./smart.js";
+import { getSnmpDevice } from "./snmp.js";
 import { getZfsPools } from "./zfs.js";
 import { startJobRunner } from "./runner.js";
 
@@ -137,6 +138,19 @@ async function main() {
   // Start polling the dashboard for jobs (container start/stop/restart/logs).
   startJobRunner();
   console.log("[agent] job runner started — polling every 3s");
+
+  // Optional: poll an SNMP device (managed switch) on the same cadence as
+  // metrics. Dormant unless AGENT_SNMP_TARGET is set.
+  if (config.snmpTarget) {
+    console.log(`[agent] SNMP polling enabled — target=${config.snmpTarget}`);
+    await safeRun(snmpTick, "snmp");
+    setInterval(() => safeRun(snmpTick, "snmp"), config.intervalMs);
+  }
+}
+
+async function snmpTick() {
+  const device = await getSnmpDevice();
+  if (device) await api.reportSnmp(device);
 }
 
 async function safeRun(fn: () => Promise<void>, label: string) {

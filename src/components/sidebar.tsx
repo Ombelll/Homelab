@@ -15,6 +15,7 @@ import {
   Menu,
   X,
   Activity,
+  Network,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/servers", label: "Servers", icon: Server },
   { href: "/containers", label: "Containers", icon: Boxes },
+  { href: "/network", label: "Network", icon: Network },
   { href: "/services", label: "Services", icon: Activity },
   { href: "/alerts", label: "Alerts", icon: Bell },
   { href: "/settings", label: "Settings", icon: Settings },

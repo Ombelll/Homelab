@@ -472,3 +472,41 @@ model AuditLog {
   @@index([action])
   @@index([userId])
 }
+
+// A network device polled over SNMP (e.g. a managed switch). Unlike Server,
+// it has no agent of its own — one of the agents on the LAN polls it via SNMP
+// and reports here. Identified by the target IP/host the agent polled.
+model NetworkDevice {
+  id         String    @id @default(cuid())
+  host       String    @unique // IP/hostname the agent polled (e.g. 192.168.1.x)
+  name       String // sysName from SNMP, or a friendly fallback
+  vendor     String? // sysDescr snippet, optional
+  uptimeSec  Int? // sysUpTime in seconds
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  ports NetworkPort[]
+}
+
+// One physical/logical interface of a NetworkDevice. Throughput is the
+// bytes/sec rate the agent computed from the SNMP octet-counter delta between
+// polls (like the host network/disk-IO rates). Rows for ports that vanish from
+// a poll are deleted (diffed in the ingest route).
+model NetworkPort {
+  id        String   @id @default(cuid())
+  deviceId  String
+  ifIndex   Int
+  name      String // ifName/ifDescr, e.g. "Gi1/0/1"
+  status    String // "up" | "down" | other ifOperStatus text
+  rxBps     Float? // inbound bytes/sec
+  txBps     Float? // outbound bytes/sec
+  inErrors  Int? // ifInErrors counter (cumulative)
+  outErrors Int? // ifOutErrors counter (cumulative)
+  updatedAt DateTime @updatedAt
+
+  device NetworkDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, ifIndex])
+  @@index([deviceId])
+}
