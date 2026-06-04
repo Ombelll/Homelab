@@ -84,6 +84,14 @@ if ! pct restore "$TEST_CTID" "$ARCHIVE" --storage "$STORAGE" >>"$LOG" 2>&1; the
   exit 1
 fi
 
+# CRITICAL: the clone inherits the source CT's static IP/MAC. Bring its NIC up
+# administratively DOWN before starting, so it can never clash with the live
+# CT on the LAN (e.g. CT 100's 192.168.1.20). We still boot it to prove the
+# rootfs + init work; it just has no network.
+BRIDGE=$(pct config "$TEST_CTID" 2>/dev/null | sed -n 's/^net0:.*bridge=\([^,]*\).*/\1/p' | head -n1)
+[ -n "$BRIDGE" ] || BRIDGE=vmbr0
+pct set "$TEST_CTID" --net0 "name=eth0,bridge=$BRIDGE,link_down=1" >>"$LOG" 2>&1 || true
+
 # Boot it and confirm it reaches "running". We give it a few seconds.
 if ! pct start "$TEST_CTID" >>"$LOG" 2>&1; then
   log "FAIL: pct start returned non-zero"
