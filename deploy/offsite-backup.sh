@@ -2,7 +2,7 @@
 # Offsite backup — encrypted mirror of the local Proxmox vzdump archives to the
 # Hetzner Storage Share (managed Nextcloud) via rclone.
 #
-# Topology:  /tank/backups/dump  --rclone sync-->  offsite:  (crypt over webdav)
+# Topology:  /tank/backups/{dump,host-config,pg}  --rclone sync-->  offsite:  (crypt over webdav)
 # The "offsite" rclone remote is a `crypt` remote wrapping a `webdav` remote, so
 # both file CONTENTS and NAMES are encrypted before they leave the host — the
 # provider only ever sees ciphertext.
@@ -18,8 +18,12 @@
 set -eu
 
 LOG=/var/log/offsite-backup.log
-SRC=/tank/backups/dump
-DST=offsite:vzdump
+BASE=/tank/backups
+# Each entry "<subdir>:<remote-name>" is mirrored separately so the big vzdump
+# tree keeps its existing offsite path (no re-upload) while the host-config
+# tarballs and loose pg-dumps — which live ONLY on tank, not inside any vzdump —
+# also go offsite (encrypted). That closes the last 3-2-1 gap for host config.
+SETS="dump:vzdump host-config:host-config pg:pg"
 
 # Optional config (kept OFF git — this is a public repo). The host stores the
 # healthchecks.io dead-man's-switch URL here, 0600:
@@ -57,22 +61,35 @@ if ! rclone listremotes 2>/dev/null | grep -q '^offsite:'; then
   hc /fail
   exit 0
 fi
-if [ ! -d "$SRC" ]; then
-  log "source $SRC missing; skipping"
+if [ ! -d "$BASE" ]; then
+  log "backup base $BASE missing; skipping"
   hc /fail
   exit 0
 fi
 
-log "starting offsite sync $SRC -> $DST"
+# Mirror each set. A missing subdir is skipped (not every box has all three).
 # --transfers/-checkers conservative for a home uplink; bump if you have headroom.
-if rclone sync "$SRC" "$DST" \
-  --transfers 2 --checkers 4 \
-  --log-file "$LOG" --log-level INFO; then
-  log "offsite sync OK"
+failed=0
+for set in $SETS; do
+  sub=${set%%:*}
+  remote=${set##*:}
+  src="$BASE/$sub"
+  [ -d "$src" ] || { log "skip $src (missing)"; continue; }
+  log "starting offsite sync $src -> offsite:$remote"
+  if rclone sync "$src" "offsite:$remote" \
+    --transfers 2 --checkers 4 \
+    --log-file "$LOG" --log-level INFO; then
+    log "offsite sync OK: $remote"
+  else
+    rc=$?
+    log "offsite sync FAILED: $remote (exit $rc)"
+    failed=1
+  fi
+done
+
+if [ "$failed" -eq 0 ]; then
   hc            # success ping — resets the dead-man's-switch timer
 else
-  rc=$?
-  log "offsite sync FAILED (exit $rc)"
   hc /fail
   exit 1
 fi

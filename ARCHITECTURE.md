@@ -65,7 +65,8 @@ backups.
 - **`tank`** — ZFS pool (~238 GB, single disk `sda`). Holds Immich library, local backups. Monthly scrub. *(No redundancy yet — a mirror/2nd disk is the main open hardening item.)*
 - **vzdump** — daily full CT/VM snapshots → `tank-backup`. Integrity-verified; a monthly host job restores the newest vzdump into a throwaway CTID and boots it (`deploy/backup-restore-test.sh`).
 - **pg_dump** — nightly logical DB dump (`pg_dump -Fc`, `deploy/pg-backup.sh`) inside CT 100 (rides along in the vzdump → offsite) plus a copy on `tank`. A monthly `deploy/pg-restore-test.sh` restores the newest dump into a scratch DB and sanity-checks it — a backup that's never restored is just a hope.
-- **Offsite** — `rclone` encrypted mirror of vzdumps → Hetzner Storage Share (crypt over Nextcloud WebDAV). Daily 05:00. healthchecks.io dead-man's switches on the offsite + restore jobs.
+- **Offsite** — `rclone` encrypted mirror of `tank/backups/{dump,host-config,pg}` → Hetzner Storage Share (crypt over Nextcloud WebDAV). Daily 05:00. healthchecks.io dead-man's switches on the offsite + restore jobs.
+- **Disaster recovery** — step-by-step rebuild-from-zero playbook in [`deploy/disaster-recovery.md`](deploy/disaster-recovery.md) (single-CT, dead-NVMe, total-loss, accidental-deletion scenarios).
 
 ## Network & DNS
 
