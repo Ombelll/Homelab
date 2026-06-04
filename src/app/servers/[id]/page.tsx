@@ -445,6 +445,27 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
                       {dv.reallocatedSectors} realloc
                     </span>
                   ) : null}
+                  {dv.mediaErrors != null ? (
+                    <span
+                      className={dv.mediaErrors > 0 ? "text-destructive" : undefined}
+                      title="NVMe media & data integrity errors (should be 0)"
+                    >
+                      {dv.mediaErrors} media err
+                    </span>
+                  ) : null}
+                  {dv.criticalWarning != null && dv.criticalWarning > 0 ? (
+                    <span className="text-destructive" title="NVMe critical warning bitfield">
+                      crit 0x{dv.criticalWarning.toString(16)}
+                    </span>
+                  ) : null}
+                  {dv.availableSparePercent != null ? (
+                    <span
+                      className={dv.availableSparePercent <= 10 ? "text-warning" : undefined}
+                      title="NVMe available spare"
+                    >
+                      {dv.availableSparePercent}% spare
+                    </span>
+                  ) : null}
                   {dv.powerOnHours != null ? (
                     <span title="Power-on hours">{dv.powerOnHours.toLocaleString()} h</span>
                   ) : null}

@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, Boxes, Cpu, HardDrive, MemoryStick, Server as ServerIcon } from "lucide-react";
+import { Activity, AlertTriangle, Boxes, Cpu, HardDrive, MemoryStick, Server as ServerIcon, Zap } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
 import { StatCard, ProgressBar } from "@/components/stat-card";
@@ -36,16 +36,33 @@ async function getDashboardData() {
 
   const running = containers.filter((c) => c.status === "running").length;
 
+  // Fleet-wide power draw: sum the latest per-server snapshot (RAPL on hosts
+  // that expose it). null when no host reports power at all.
+  const powerServers = servers.filter((s) => s.powerWatts != null);
+  const totalWatts =
+    powerServers.length === 0
+      ? null
+      : powerServers.reduce((acc, s) => acc + (s.powerWatts ?? 0), 0);
+
   return {
     totals: { servers: servers.length, online, warning, critical, offline },
     avg: { cpu: avg("cpuPercent"), mem: avg("memoryPercent"), disk: avg("diskPercent") },
     containers: { total: containers.length, running },
+    power: { totalWatts, hosts: powerServers.length },
     alerts,
   };
 }
 
 export default async function DashboardPage() {
   const data = await getDashboardData();
+
+  const powerPrice = Number(process.env.POWER_PRICE_EUR_PER_KWH ?? "0.34") || 0.34;
+  const w = data.power.totalWatts;
+  const powerValue = w == null ? "—" : `${w.toFixed(0)} W`;
+  const powerHint =
+    w == null
+      ? "no power data yet"
+      : `~${((w * 24) / 1000).toFixed(1)} kWh/d · €${(((w * 24) / 1000) * 30 * powerPrice).toFixed(0)}/mnd`;
 
   return (
     <>
@@ -65,10 +82,11 @@ export default async function DashboardPage() {
           icon={Boxes} hint="running / total" />
       </div>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <ResourceCard label="Avg CPU" value={data.avg.cpu} icon={Cpu} />
         <ResourceCard label="Avg Memory" value={data.avg.mem} icon={MemoryStick} />
         <ResourceCard label="Avg Disk" value={data.avg.disk} icon={HardDrive} />
+        <StatCard label="Power" value={powerValue} icon={Zap} hint={powerHint} />
       </div>
 
       <div className="mt-6 rounded-xl border border-border bg-card p-5">

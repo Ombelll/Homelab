@@ -100,6 +100,12 @@ model SmartDevice {
   reallocatedSectors Int?
   // SSD/NVMe media wear as a "percentage used" (0 = new, 100 = rated EOL).
   wearPercent       Int?
+  // NVMe health log: media_errors (uncorrectable data errors — should be 0),
+  // critical_warning (bitfield; non-zero = spare low / read-only / overtemp),
+  // and available_spare as a percentage (drops toward 0 as the SSD ages out).
+  mediaErrors          Int?
+  criticalWarning      Int?
+  availableSparePercent Int?
   updatedAt         DateTime @updatedAt
 
   server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
@@ -235,6 +241,8 @@ model MetricHourly {
   diskBpsAvg    Float?
   diskBpsMax    Float?
   tempMax       Float?
+  powerWattsAvg Float?
+  powerWattsMax Float?
   sampleCount   Int
 
   server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)

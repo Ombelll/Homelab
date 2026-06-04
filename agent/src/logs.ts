@@ -9,6 +9,29 @@ export type LogLine = { source: string; message: string; at?: string };
 // useful. (Full-fidelity logging belongs in a dedicated stack, not here.)
 const INTERESTING = /\b(error|err|warn|fail|failed|fatal|panic|critical|denied|refused|timeout|exception)\b/i;
 
+// Known-benign lines that the kernel/systemd emit at warning priority but which
+// are pure noise on this kind of host (Proxmox + ZFS + Docker-in-LXC). Dropping
+// them keeps the Logs page focused on real problems. Add patterns sparingly and
+// only when certain they're harmless — see docs for why each is safe.
+const NOISE = new RegExp(
+  [
+    "overlayfs: .*(does not support file handles|falling back to xino)", // Docker overlay on ZFS/LXC
+    "got inotify poll request in wrong process", // pveproxy worker fork, cosmetic
+    "(taints kernel|module license .*taints|Disabling lock debugging due to kernel taint)", // ZFS/SPL CDDL
+    "EISA: Cannot allocate resource|platform eisa\\.0", // legacy EISA bus probe
+    "Direct firmware load for regulatory\\.db failed", // no WiFi regdb, unused
+    "ext4_multi_mount_protect.*MMP interval", // boot MMP wait after unclean shutdown
+    "couldn't find an input interrupt endpoint", // USB HID (UPS) quirk
+    "SGX disabled by BIOS", // informational
+    "ENERGY_PERF_BIAS: Set to", // informational CPU bias
+    "CONFIG_IMA_DISABLE_HTABLE is disabled", // kernel config note
+    "Failed to increase receive buffer size for general netlink", // unprivileged LXC, non-fatal
+    "Assertion failed for apparmor\\.service", // AppArmor unconfined in unprivileged LXC
+    "kauditd_printk_skb: .* callbacks suppressed", // audit rate-limit notice
+  ].join("|"),
+  "i",
+);
+
 // A touch longer than the 5-min ship cadence so nothing slips through the gap.
 const SINCE = "6 min ago";
 const PER_SOURCE_CAP = 100;
@@ -30,6 +53,7 @@ async function hostJournal(): Promise<LogLine[]> {
       .split("\n")
       .map((l) => l.trim())
       .filter(Boolean)
+      .filter((l) => !NOISE.test(l))
       .slice(-PER_SOURCE_CAP)
       .map((message) => ({ source: "host", message: clip(message) }));
   } catch {
@@ -49,6 +73,7 @@ async function containerLogs(name: string): Promise<LogLine[]> {
     const out: LogLine[] = [];
     for (const line of lines) {
       if (!INTERESTING.test(line)) continue;
+      if (NOISE.test(line)) continue;
       // docker --timestamps prefixes RFC3339Nano + space.
       const sp = line.indexOf(" ");
       const ts = sp > 0 ? line.slice(0, sp) : undefined;

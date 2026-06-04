@@ -228,6 +228,9 @@ export async function POST(request: Request) {
         powerOnHours: x.powerOnHours ?? null,
         reallocatedSectors: x.reallocatedSectors ?? null,
         wearPercent: x.wearPercent ?? null,
+        mediaErrors: x.mediaErrors ?? null,
+        criticalWarning: x.criticalWarning ?? null,
+        availableSparePercent: x.availableSparePercent ?? null,
       };
       ops.push(
         prisma.smartDevice.upsert({

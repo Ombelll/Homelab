@@ -218,6 +218,10 @@ const REALLOC_WARN = 10;
 const REALLOC_CRIT = 50;
 const WEAR_WARN = 90;
 const WEAR_CRIT = 95;
+// NVMe available-spare percentage: warns as it drops toward the drive's
+// threshold, critical when nearly exhausted.
+const SPARE_WARN = 10;
+const SPARE_CRIT = 5;
 
 export async function evaluateStateAlerts(input: {
   serverId: string;
@@ -264,7 +268,11 @@ export async function evaluateStateAlerts(input: {
   const degrading = smart.filter(
     (dv) =>
       dv.healthy &&
-      ((dv.reallocatedSectors ?? 0) >= REALLOC_WARN || (dv.wearPercent ?? 0) >= WEAR_WARN),
+      ((dv.reallocatedSectors ?? 0) >= REALLOC_WARN ||
+        (dv.wearPercent ?? 0) >= WEAR_WARN ||
+        (dv.mediaErrors ?? 0) > 0 ||
+        (dv.criticalWarning ?? 0) > 0 ||
+        (dv.availableSparePercent != null && dv.availableSparePercent <= SPARE_WARN)),
   );
 
   // A container is "in trouble" when its healthcheck reports unhealthy or it's
@@ -394,7 +402,12 @@ export async function evaluateStateAlerts(input: {
       type: "smart-degrading",
       breaching: degrading.length > 0,
       severity: degrading.some(
-        (dv) => (dv.reallocatedSectors ?? 0) >= REALLOC_CRIT || (dv.wearPercent ?? 0) >= WEAR_CRIT,
+        (dv) =>
+          (dv.reallocatedSectors ?? 0) >= REALLOC_CRIT ||
+          (dv.wearPercent ?? 0) >= WEAR_CRIT ||
+          (dv.mediaErrors ?? 0) > 0 ||
+          (dv.criticalWarning ?? 0) > 0 ||
+          (dv.availableSparePercent != null && dv.availableSparePercent <= SPARE_CRIT),
       )
         ? "critical"
         : "warning",
@@ -403,6 +416,10 @@ export async function evaluateStateAlerts(input: {
           const bits: string[] = [];
           if ((dv.reallocatedSectors ?? 0) >= REALLOC_WARN) bits.push(`${dv.reallocatedSectors} reallocated`);
           if ((dv.wearPercent ?? 0) >= WEAR_WARN) bits.push(`${dv.wearPercent}% wear`);
+          if ((dv.mediaErrors ?? 0) > 0) bits.push(`${dv.mediaErrors} media errors`);
+          if ((dv.criticalWarning ?? 0) > 0) bits.push(`critical warning 0x${(dv.criticalWarning ?? 0).toString(16)}`);
+          if (dv.availableSparePercent != null && dv.availableSparePercent <= SPARE_WARN)
+            bits.push(`${dv.availableSparePercent}% spare`);
           return `${dv.device} (${bits.join(", ")})`;
         })
         .join(", ")}`,

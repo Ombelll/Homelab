@@ -37,6 +37,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
         netBps: true,
         diskBps: true,
         maxTempC: true,
+        powerWatts: true,
       },
     });
     return NextResponse.json({
@@ -53,6 +54,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
         net: m.netBps,
         diskIo: m.diskBps,
         temp: m.maxTempC,
+        power: m.powerWatts,
       })),
     });
   }
@@ -78,6 +80,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
       net: r.netBpsAvg,
       diskIo: r.diskBpsAvg,
       temp: r.tempMax,
+      power: r.powerWattsAvg,
       sampleCount: r.sampleCount,
     })),
   });

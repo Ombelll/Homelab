@@ -122,6 +122,9 @@ export const smartDeviceSchema = z.object({
   powerOnHours: z.number().int().min(0).optional(),
   reallocatedSectors: z.number().int().min(0).optional(),
   wearPercent: z.number().int().min(0).max(255).optional(),
+  mediaErrors: z.number().int().min(0).optional(),
+  criticalWarning: z.number().int().min(0).optional(),
+  availableSparePercent: z.number().int().min(0).max(100).optional(),
 });
 
 export const upsSchema = z.object({

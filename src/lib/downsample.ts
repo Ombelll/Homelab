@@ -43,6 +43,7 @@ export async function downsampleHourly(input?: {
         netBps: true,
         diskBps: true,
         maxTempC: true,
+        powerWatts: true,
         createdAt: true,
       },
       orderBy: { createdAt: "asc" },
@@ -67,6 +68,7 @@ export async function downsampleHourly(input?: {
       accumulate(b.swap, m.swapPercent);
       accumulate(b.net, m.netBps);
       accumulate(b.diskBps, m.diskBps);
+      accumulate(b.power, m.powerWatts);
       if (m.maxTempC != null && (b.tempMax == null || m.maxTempC > b.tempMax)) {
         b.tempMax = m.maxTempC;
       }
@@ -88,6 +90,8 @@ export async function downsampleHourly(input?: {
         diskBpsAvg: avg(b.diskBps),
         diskBpsMax: max(b.diskBps),
         tempMax: b.tempMax == null ? null : round2(b.tempMax),
+        powerWattsAvg: avg(b.power),
+        powerWattsMax: max(b.power),
         sampleCount: b.n,
       };
       await prisma.metricHourly.upsert({
@@ -119,6 +123,7 @@ type Bucket = {
   swap: Agg;
   net: Agg;
   diskBps: Agg;
+  power: Agg;
   tempMax: number | null;
 };
 
@@ -134,6 +139,7 @@ function newBucket(): Bucket {
     swap: { sum: 0, n: 0, max: 0 },
     net: { sum: 0, n: 0, max: 0 },
     diskBps: { sum: 0, n: 0, max: 0 },
+    power: { sum: 0, n: 0, max: 0 },
     tempMax: null,
   };
 }

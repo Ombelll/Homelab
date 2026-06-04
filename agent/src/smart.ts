@@ -12,6 +12,9 @@ export type SmartDevice = {
   powerOnHours?: number;
   reallocatedSectors?: number;
   wearPercent?: number;
+  mediaErrors?: number;
+  criticalWarning?: number;
+  availableSparePercent?: number;
 };
 
 type ScanJson = { devices?: Array<{ name?: string }> };
@@ -23,7 +26,12 @@ type SmartJson = {
   smart_status?: { passed?: boolean };
   temperature?: { current?: number };
   power_on_time?: { hours?: number };
-  nvme_smart_health_information_log?: { percentage_used?: number };
+  nvme_smart_health_information_log?: {
+    percentage_used?: number;
+    media_errors?: number;
+    critical_warning?: number;
+    available_spare?: number;
+  };
   ata_smart_attributes?: { table?: Array<{ id?: number; raw?: { value?: number } }> };
 };
 
@@ -91,9 +99,11 @@ async function readDevice(name: string): Promise<SmartDevice | null> {
   if (typeof j.serial_number === "string") dev.serial = j.serial_number;
   if (typeof j.temperature?.current === "number") dev.tempC = j.temperature.current;
   if (typeof j.power_on_time?.hours === "number") dev.powerOnHours = j.power_on_time.hours;
-  if (typeof j.nvme_smart_health_information_log?.percentage_used === "number") {
-    dev.wearPercent = j.nvme_smart_health_information_log.percentage_used;
-  }
+  const nvme = j.nvme_smart_health_information_log;
+  if (typeof nvme?.percentage_used === "number") dev.wearPercent = nvme.percentage_used;
+  if (typeof nvme?.media_errors === "number") dev.mediaErrors = nvme.media_errors;
+  if (typeof nvme?.critical_warning === "number") dev.criticalWarning = nvme.critical_warning;
+  if (typeof nvme?.available_spare === "number") dev.availableSparePercent = nvme.available_spare;
   // ATA "Reallocated_Sector_Ct" is attribute id 5 — a rising raw value is the
   // classic early-failure signal.
   const realloc = j.ata_smart_attributes?.table?.find((a) => a.id === 5);

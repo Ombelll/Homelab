@@ -77,6 +77,9 @@ export const api = {
       powerOnHours?: number;
       reallocatedSectors?: number;
       wearPercent?: number;
+      mediaErrors?: number;
+      criticalWarning?: number;
+      availableSparePercent?: number;
     }>;
     ups?: {
       name: string;

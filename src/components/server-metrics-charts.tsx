@@ -10,6 +10,7 @@ import {
   Activity,
   Thermometer,
   Layers,
+  Zap,
 } from "lucide-react";
 import { Sparkline } from "@/components/sparkline";
 import { ProgressBar } from "@/components/stat-card";
@@ -25,6 +26,7 @@ type Point = {
   net: number | null;
   diskIo: number | null;
   temp: number | null;
+  power: number | null;
 };
 
 type Range = "15m" | "1h" | "6h" | "24h" | "7d" | "30d";
@@ -76,10 +78,10 @@ export function ServerMetricsCharts({ serverId }: { serverId: string }) {
 
   // A series is only worth a panel if it carried at least one real value over
   // the window (older rows / non-Linux hosts leave these null).
-  const has = (key: "swap" | "net" | "diskIo" | "temp") =>
+  const has = (key: "swap" | "net" | "diskIo" | "temp" | "power") =>
     data.some((p) => p[key] != null);
   // Map nulls to 0 for the sparkline (it wants a dense number[]).
-  const series = (key: "swap" | "net" | "diskIo" | "temp") =>
+  const series = (key: "swap" | "net" | "diskIo" | "temp" | "power") =>
     data.map((p) => p[key] ?? 0);
 
   return (
@@ -126,7 +128,7 @@ export function ServerMetricsCharts({ serverId }: { serverId: string }) {
         <MetricPanel label="Disk" icon={HardDrive} value={latest?.disk} values={data.map((p) => p.disk)} percent />
       </div>
 
-      {has("swap") || has("net") || has("diskIo") || has("temp") ? (
+      {has("swap") || has("net") || has("diskIo") || has("temp") || has("power") ? (
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {has("swap") ? (
             <MetricPanel
@@ -171,6 +173,16 @@ export function ServerMetricsCharts({ serverId }: { serverId: string }) {
                     ? "warning"
                     : "success"
               }
+            />
+          ) : null}
+          {has("power") ? (
+            <MetricPanel
+              label="Power"
+              icon={Zap}
+              value={latest?.power ?? undefined}
+              values={series("power")}
+              format={(v) => `${v.toFixed(0)} W`}
+              tone="primary"
             />
           ) : null}
         </div>
