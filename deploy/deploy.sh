@@ -20,15 +20,17 @@ log "Rebuilding dashboard in CT $DASH_CT (git pull + compose up --build)…"
 pct exec "$DASH_CT" -- bash -c \
   "cd $DASH_DIR && git pull --no-edit -q && docker compose $COMPOSE up -d --build" 2>&1 | tail -5
 
-# Host agent (if installed on the host itself, e.g. Proxmox).
-if [ -x "$AGENT" ]; then
+# Host agent (if installed on the host itself, e.g. Proxmox). Check for the
+# file, not the executable bit — git checkouts on some platforms drop +x, which
+# would silently skip the agent refresh (and the host-side deploy scripts).
+if [ -f "$AGENT" ]; then
   log "Updating host agent…"
   if bash "$AGENT" >/dev/null 2>&1; then log "  host agent OK"; else log "  host agent FAILED"; fi
 fi
 
 # Agent inside each Linux CT that has the installer.
 for ct in $AGENT_CTS; do
-  if pct exec "$ct" -- test -x "$AGENT" 2>/dev/null; then
+  if pct exec "$ct" -- test -f "$AGENT" 2>/dev/null; then
     log "Updating agent in CT $ct…"
     if pct exec "$ct" -- bash "$AGENT" >/dev/null 2>&1; then log "  CT $ct agent OK"; else log "  CT $ct agent FAILED"; fi
   fi
