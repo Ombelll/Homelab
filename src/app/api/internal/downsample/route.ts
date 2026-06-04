@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { downsampleHourly } from "@/lib/downsample";
+import { snapshotCapacity } from "@/lib/capacity";
 import { checkSweepKey } from "@/lib/sweep-auth";
 
 export const dynamic = "force-dynamic";
@@ -26,5 +27,9 @@ export async function POST(request: Request) {
     lookbackHours: Number.isFinite(lookback) ? lookback : undefined,
   });
 
-  return NextResponse.json({ ok: true, ...result });
+  // Piggyback the capacity snapshot on the same cron — builds the per-mount /
+  // per-pool history the fill-up forecast reads from.
+  const capacity = await snapshotCapacity();
+
+  return NextResponse.json({ ok: true, ...result, capacitySamples: capacity.samples });
 }

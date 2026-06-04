@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { notifyAlert } from "@/lib/notifications";
+import { forecastServer } from "@/lib/capacity";
 
 /**
  * Threshold-based alert engine with sustain + ack + maintenance windows.
@@ -210,7 +211,8 @@ type StateType =
   | "backup-stale"
   | "container-unhealthy"
   | "ups-on-battery"
-  | "smart-degrading";
+  | "smart-degrading"
+  | "capacity-forecast";
 
 // SMART degradation (early warning, before a drive flips to outright failed):
 // reallocated sectors climbing, or an SSD's wear indicator running out.
@@ -222,6 +224,10 @@ const WEAR_CRIT = 95;
 // threshold, critical when nearly exhausted.
 const SPARE_WARN = 10;
 const SPARE_CRIT = 5;
+// Capacity fill-up forecast: warn when a disk/pool is projected to hit 100%
+// within this many days at its current growth rate; critical when very soon.
+const FORECAST_WARN_DAYS = 30;
+const FORECAST_CRIT_DAYS = 14;
 
 export async function evaluateStateAlerts(input: {
   serverId: string;
@@ -274,6 +280,13 @@ export async function evaluateStateAlerts(input: {
         (dv.criticalWarning ?? 0) > 0 ||
         (dv.availableSparePercent != null && dv.availableSparePercent <= SPARE_WARN)),
   );
+
+  // Capacity forecast: disks/pools projected to fill within the warn horizon,
+  // soonest first. Empty until enough CapacitySample history has accumulated.
+  const forecasts = await forecastServer(input.serverId);
+  const fillingSoon = [...forecasts.entries()]
+    .filter(([, f]) => f.etaDays <= FORECAST_WARN_DAYS)
+    .sort((a, b) => a[1].etaDays - b[1].etaDays);
 
   // A container is "in trouble" when its healthcheck reports unhealthy or it's
   // stuck restart-looping. We deliberately do NOT alert on "exited"/"created"/
@@ -437,6 +450,16 @@ export async function evaluateStateAlerts(input: {
           ? `, ~${Math.round(server.upsRuntimeSec / 60)} min runtime left`
           : ""
       }`,
+    }),
+    reconcileState({
+      ...input,
+      inMaintenance,
+      type: "capacity-forecast",
+      breaching: fillingSoon.length > 0,
+      severity: fillingSoon.some(([, f]) => f.etaDays <= FORECAST_CRIT_DAYS) ? "critical" : "warning",
+      message: `Filling up on ${input.serverName}: ${fillingSoon
+        .map(([key, f]) => `${key.replace(/^(disk|zfs):/, "")} full in ~${Math.round(f.etaDays)}d`)
+        .join(", ")}`,
     }),
   ]);
 }

@@ -79,6 +79,27 @@ model Server {
   smartDevices       SmartDevice[]
   upsSamples         UpsSample[]
   logs               LogEntry[]
+  capacitySamples    CapacitySample[]
+}
+
+// Hourly snapshot of per-mount / per-pool usage, so we can fit a growth trend
+// and forecast when a filesystem or ZFS pool will fill up. Written by the
+// capacity snapshotter (piggybacks the downsample cron); one row per
+// (server, kind, name, hour) so it's idempotent and bounded. Pruned by the
+// retention job at a longer horizon than raw metrics (we want weeks of trend).
+model CapacitySample {
+  id         String   @id @default(cuid())
+  serverId   String
+  kind       String   // "disk" | "zfs"
+  name       String   // mountpoint (disk) or pool name (zfs)
+  usedBytes  Float
+  totalBytes Float
+  hourStart  DateTime
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, kind, name, hourStart])
+  @@index([serverId, kind, name, hourStart])
 }
 
 // Physical-disk SMART health snapshot from the agent (smartctl). The agent

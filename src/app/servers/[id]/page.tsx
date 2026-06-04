@@ -8,6 +8,7 @@ import { ServerMetricsCharts } from "@/components/server-metrics-charts";
 import { ServerActions } from "@/components/server-actions";
 import { Sparkline } from "@/components/sparkline";
 import { getCurrentUser } from "@/lib/session";
+import { forecastServer } from "@/lib/capacity";
 import { formatRelativeTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -70,6 +71,10 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
   const [server, user] = await Promise.all([getData(params.id), getCurrentUser()]);
   if (!server) notFound();
   const isAdmin = user?.role === "admin";
+  // Fill-up forecast per disk/pool (keyed "disk:<mount>" / "zfs:<pool>").
+  const forecasts = await forecastServer(server.id);
+  const fmtEta = (days: number) =>
+    days >= 365 ? `~${(days / 365).toFixed(1)}y` : days >= 30 ? `~${Math.round(days / 30)}mo` : `~${Math.round(days)}d`;
 
   const loadAvg = parseJsonField<[number, number, number]>(server.loadAvg);
   const networkRates = parseJsonField<Array<{ iface: string; rxBps: number; txBps: number }>>(
@@ -372,6 +377,9 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
                     </div>
                     <span className="tabular-nums text-muted-foreground">
                       {formatBytes(pool.usedBytes)} / {formatBytes(pool.totalBytes)} · {pct.toFixed(0)}%
+                      {forecasts.get(`zfs:${pool.name}`)
+                        ? ` · full in ${fmtEta(forecasts.get(`zfs:${pool.name}`)!.etaDays)}`
+                        : ""}
                     </span>
                   </div>
                   <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -496,6 +504,9 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
                         </div>
                         <span className="tabular-nums text-muted-foreground">
                           {formatBytes(d.usedBytes)} / {formatBytes(d.totalBytes)} · {pct.toFixed(0)}%
+                          {forecasts.get(`disk:${d.mountpoint}`)
+                            ? ` · full in ${fmtEta(forecasts.get(`disk:${d.mountpoint}`)!.etaDays)}`
+                            : ""}
                         </span>
                       </div>
                       <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">

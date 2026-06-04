@@ -39,14 +39,18 @@ export async function POST(request: Request) {
 
   const now = new Date();
   const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  // Capacity samples drive the fill-up forecast, which fits a trend over weeks —
+  // keep them longer than the raw-metric window (at least 90 days).
+  const capacityCutoff = new Date(now.getTime() - Math.max(days, 90) * 24 * 60 * 60 * 1000);
 
-  const [metrics, checkResults, upsSamples, netSamples, logs, alerts, jobs, sessions, invites, audit] =
+  const [metrics, checkResults, upsSamples, netSamples, logs, capacitySamples, alerts, jobs, sessions, invites, audit] =
     await prisma.$transaction([
     prisma.metric.deleteMany({ where: { createdAt: { lt: cutoff } } }),
     prisma.healthCheckResult.deleteMany({ where: { at: { lt: cutoff } } }),
     prisma.upsSample.deleteMany({ where: { at: { lt: cutoff } } }),
     prisma.networkDeviceSample.deleteMany({ where: { at: { lt: cutoff } } }),
     prisma.logEntry.deleteMany({ where: { at: { lt: cutoff } } }),
+    prisma.capacitySample.deleteMany({ where: { hourStart: { lt: capacityCutoff } } }),
     prisma.alert.deleteMany({
       where: { resolved: true, createdAt: { lt: cutoff } },
     }),
@@ -78,6 +82,7 @@ export async function POST(request: Request) {
       upsSamples: upsSamples.count,
       netSamples: netSamples.count,
       logs: logs.count,
+      capacitySamples: capacitySamples.count,
       alerts: alerts.count,
       jobs: jobs.count,
       sessions: sessions.count,
