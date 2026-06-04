@@ -283,6 +283,8 @@ model Container {
   // from `docker inspect --format '{{.RestartCount}}'`. A spike here is a
   // crashloop; the UI surfaces a badge once it crosses a threshold.
   restartCount     Int?
+  // True if the last run was OOM-killed (hit its memory limit). Drives an alert.
+  oomKilled        Boolean?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

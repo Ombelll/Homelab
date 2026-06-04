@@ -139,6 +139,7 @@ export async function POST(request: Request) {
         composeProject: c.composeProject ?? null,
         composeService: c.composeService ?? null,
         restartCount: c.restartCount ?? null,
+        oomKilled: c.oomKilled ?? null,
         ...stats,
       };
       ops.push(

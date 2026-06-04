@@ -1,0 +1,14 @@
+{
+  "name": "Homelab Control Center",
+  "short_name": "Homelab",
+  "description": "Monitor your homelab servers, containers, network, power and alerts.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -32,6 +32,9 @@ export type DockerContainer = {
   // Total restarts since creation (from `docker inspect`). High values
   // indicate a crashloop.
   restartCount?: number;
+  // True if the container's last run was killed by the OOM killer (hit its
+  // memory limit). A clear, actionable signal — drives an alert.
+  oomKilled?: boolean;
 };
 
 export async function listDockerContainers(): Promise<DockerContainer[] | null> {
@@ -56,18 +59,6 @@ export async function listDockerContainers(): Promise<DockerContainer[] | null> 
       if (d) c.imageDigest = d;
     }
 
-    // Decorate with restart counts (best-effort, one docker inspect for the
-    // whole list).
-    if (base.length > 0) {
-      const restarts = await readRestartCounts(base.map((c) => c.dockerId)).catch(
-        () => new Map<string, number>(),
-      );
-      for (const c of base) {
-        const n = restarts.get(c.dockerId);
-        if (typeof n === "number") c.restartCount = n;
-      }
-    }
-
     // Decorate with stats (best-effort). `docker stats --no-stream` returns
     // one row per running container, with --format json one per line.
     const stats = await readStats().catch(() => new Map<string, ContainerStats>());
@@ -78,6 +69,22 @@ export async function listDockerContainers(): Promise<DockerContainer[] | null> 
         c.cpuPercent = s.cpuPercent;
         c.memoryBytes = s.memoryBytes;
         c.memoryLimitBytes = s.memoryLimitBytes;
+      }
+    }
+
+    // Decorate with inspect data (restart count, OOM-killed, configured memory
+    // limit) — one inspect for the whole list. A configured cgroup limit
+    // overrides the stats limit, which falls back to host RAM when unset.
+    if (base.length > 0) {
+      const insp = await readInspect(base.map((c) => c.dockerId)).catch(
+        () => new Map<string, InspectInfo>(),
+      );
+      for (const c of base) {
+        const i = insp.get(c.dockerId);
+        if (!i) continue;
+        if (typeof i.restartCount === "number") c.restartCount = i.restartCount;
+        c.oomKilled = i.oomKilled;
+        if (i.memLimit && i.memLimit > 0) c.memoryLimitBytes = i.memLimit;
       }
     }
 
@@ -183,21 +190,35 @@ type ContainerStats = {
   memoryLimitBytes: number;
 };
 
+type InspectInfo = { restartCount?: number; oomKilled?: boolean; memLimit?: number };
+
 /**
- * Map dockerId → restart count. `docker inspect` accepts an arbitrary
- * number of ids and a Go template; we ask for "<id> <count>" per line.
+ * Map dockerId → inspect facts (restart count, OOM-killed, configured memory
+ * limit in bytes). One `docker inspect` for the whole list, pipe-delimited
+ * Go template so whitespace can't split a field.
  */
-async function readRestartCounts(ids: string[]): Promise<Map<string, number>> {
+async function readInspect(ids: string[]): Promise<Map<string, InspectInfo>> {
   if (ids.length === 0) return new Map();
   const { stdout } = await docker(
-    ["inspect", "--format", "{{.Id}} {{.RestartCount}}", ...ids],
+    [
+      "inspect",
+      "--format",
+      "{{.Id}}|{{.RestartCount}}|{{.State.OOMKilled}}|{{.HostConfig.Memory}}",
+      ...ids,
+    ],
     2 * 1024 * 1024,
   );
-  const map = new Map<string, number>();
+  const map = new Map<string, InspectInfo>();
   for (const line of stdout.split("\n").map((l) => l.trim()).filter(Boolean)) {
-    const [id, count] = line.split(/\s+/);
-    const n = Number(count);
-    if (id && Number.isFinite(n)) map.set(id, n);
+    const [id, restart, oom, mem] = line.split("|");
+    if (!id) continue;
+    const rc = Number(restart);
+    const ml = Number(mem);
+    map.set(id, {
+      restartCount: Number.isFinite(rc) ? rc : undefined,
+      oomKilled: oom === "true",
+      memLimit: Number.isFinite(ml) ? ml : undefined,
+    });
   }
   return map;
 }

@@ -245,7 +245,14 @@ export async function evaluateStateAlerts(input: {
     }),
     prisma.container.findMany({
       where: { serverId: input.serverId },
-      select: { name: true, status: true, health: true },
+      select: {
+        name: true,
+        status: true,
+        health: true,
+        oomKilled: true,
+        memoryBytes: true,
+        memoryLimitBytes: true,
+      },
     }),
   ]);
 
@@ -263,11 +270,35 @@ export async function evaluateStateAlerts(input: {
   // A container is "in trouble" when its healthcheck reports unhealthy or it's
   // stuck restart-looping. We deliberately do NOT alert on "exited"/"created"/
   // "paused" — those are usually intentional and would be noisy.
+  // A container counts as "near its memory limit" only when a real cgroup
+  // limit is set (the agent reports the configured limit; without one the
+  // limit is host RAM and the ratio stays low → no false positives).
+  const MEM_NEAR_LIMIT = 0.9;
+  const nearLimit = (c: { memoryBytes: number | null; memoryLimitBytes: number | null }) =>
+    c.memoryBytes != null &&
+    c.memoryLimitBytes != null &&
+    c.memoryLimitBytes > 0 &&
+    c.memoryBytes / c.memoryLimitBytes >= MEM_NEAR_LIMIT;
+
   const badContainers = containers.filter(
-    (c) => c.health === "unhealthy" || c.status === "restarting",
+    (c) => c.health === "unhealthy" || c.status === "restarting" || c.oomKilled || nearLimit(c),
   );
-  const reason = (c: { status: string; health: string | null }) =>
-    c.health === "unhealthy" ? "unhealthy" : "restarting";
+  const reason = (c: {
+    status: string;
+    health: string | null;
+    oomKilled: boolean | null;
+    memoryBytes: number | null;
+    memoryLimitBytes: number | null;
+  }) =>
+    c.oomKilled
+      ? "OOM-killed"
+      : c.health === "unhealthy"
+        ? "unhealthy"
+        : c.status === "restarting"
+          ? "restarting"
+          : nearLimit(c)
+            ? `mem ${Math.round((c.memoryBytes! / c.memoryLimitBytes!) * 100)}%`
+            : "issue";
 
   // NUT status flags: OL=on mains, OB=on battery, LB=low battery. We alert
   // while on battery (mains outage in progress) and escalate to critical at
