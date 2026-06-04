@@ -59,3 +59,29 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
   return NextResponse.json({ ok: true });
 }
+
+/**
+ * Remove a server and everything that hangs off it. All child relations
+ * (metrics, containers, disks, alerts, samples, …) are `onDelete: Cascade`
+ * in the schema, so a single delete tears down the whole record. Used to
+ * retire a decommissioned host: stop/disable its agent first, otherwise the
+ * agent's next check-in re-creates the server.
+ */
+export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+
+  const existing = await prisma.server.findUnique({ where: { id: params.id } });
+  if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  await prisma.server.delete({ where: { id: params.id } });
+
+  void recordAudit({
+    user: guard.user,
+    action: "server.delete",
+    target: `server:${existing.id}`,
+    metadata: { name: existing.name, hostname: existing.hostname },
+  });
+
+  return NextResponse.json({ ok: true });
+}

@@ -340,6 +340,7 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
         <div className="mt-6">
           <ServerActions
             serverId={server.id}
+            serverName={server.name}
             initialMac={server.macAddress}
             serverStatus={server.status}
           />

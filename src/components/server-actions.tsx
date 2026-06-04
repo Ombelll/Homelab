@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Edit3, Loader2, Power, RefreshCw } from "lucide-react";
+import { Check, Edit3, Loader2, Power, RefreshCw, Trash2 } from "lucide-react";
 
 /**
  * Per-server controls visible on the detail page. Only renders for admins.
@@ -14,19 +14,23 @@ import { Check, Edit3, Loader2, Power, RefreshCw } from "lucide-react";
  */
 export function ServerActions({
   serverId,
+  serverName,
   initialMac,
   serverStatus,
 }: {
   serverId: string;
+  serverName: string;
   initialMac: string | null;
   serverStatus: string;
 }) {
   const router = useRouter();
   const [mac, setMac] = useState(initialMac ?? "");
   const [editing, setEditing] = useState(false);
-  const [busy, setBusy] = useState<"save" | "wake" | "update" | null>(null);
+  const [busy, setBusy] = useState<"save" | "wake" | "update" | "delete" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
 
   async function save() {
     setBusy("save");
@@ -63,6 +67,25 @@ export function ServerActions({
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      setBusy(null);
+    }
+  }
+
+  async function remove() {
+    setBusy("delete");
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch(`/api/servers/${serverId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `delete failed (${res.status})`);
+      }
+      // Gone — leave the (now-404) detail page.
+      router.push("/servers");
+      router.refresh();
+    } catch (e) {
+      setError((e as Error).message);
       setBusy(null);
     }
   }
@@ -178,6 +201,63 @@ export function ServerActions({
           )}
           Update agent
         </button>
+      </div>
+
+      <div className="mt-4 border-t border-destructive/30 pt-4">
+        <h2 className="text-sm font-semibold text-destructive">Danger zone</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Permanently remove this server and all its history (metrics,
+          containers, alerts). Stop or disable its agent first — otherwise the
+          next check-in re-creates it.
+        </p>
+        {confirmDelete ? (
+          <div className="mt-3 space-y-2">
+            <label className="block text-xs text-muted-foreground">
+              Type the server name <span className="font-mono text-foreground">{serverName}</span> to confirm:
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder={serverName}
+                className="min-w-[12rem] flex-1 rounded-md border border-border bg-background px-3 py-1.5 font-mono text-sm outline-none focus:ring-2 focus:ring-destructive"
+              />
+              <button
+                type="button"
+                disabled={busy === "delete" || confirmText !== serverName}
+                onClick={remove}
+                className="inline-flex items-center gap-1.5 rounded-md bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground hover:opacity-90 disabled:opacity-50"
+              >
+                {busy === "delete" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+                Delete server
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmDelete(false);
+                  setConfirmText("");
+                  setError(null);
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/20"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Remove server…
+          </button>
+        )}
       </div>
     </div>
   );

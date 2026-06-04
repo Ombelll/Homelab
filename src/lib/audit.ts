@@ -33,6 +33,7 @@ export const AUDIT_ACTIONS = [
   "maintenance.create",
   "maintenance.delete",
   "server.update",
+  "server.delete",
   "server.wake",
   "agent.update",
   "backup.export",
