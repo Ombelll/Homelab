@@ -28,6 +28,13 @@ services:
       # retention, sweep, health-checks, image-update checks) that the host
       # cron drives. If unset the endpoints stay open (LAN-reachable), so set it.
       SWEEP_KEY: "${SWEEP_KEY:-}"
+      # Quiet hours (only critical alerts pushed in the window), the public
+      # status-page token (/status/<token>; empty = disabled), and the €/kWh
+      # used for the power-cost estimate. All optional.
+      QUIET_HOURS_START: "${QUIET_HOURS_START:-}"
+      QUIET_HOURS_END: "${QUIET_HOURS_END:-}"
+      STATUS_PAGE_TOKEN: "${STATUS_PAGE_TOKEN:-}"
+      POWER_PRICE_EUR_PER_KWH: "${POWER_PRICE_EUR_PER_KWH:-0.34}"
       NODE_ENV: production
     volumes:
       # Legacy: held the old SQLite DB before the Postgres migration. Kept
