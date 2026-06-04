@@ -74,6 +74,11 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
   const existing = await prisma.server.findUnique({ where: { id: params.id } });
   if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
 
+  // Alert.serverId is onDelete:SetNull (we keep alert history when a server is
+  // pruned), but a deleted server's *open* alerts would then linger forever as
+  // orphaned "system" alerts the engine can never auto-resolve. Drop them up
+  // front so removing a server leaves no dangling alerts behind.
+  await prisma.alert.deleteMany({ where: { serverId: params.id } });
   await prisma.server.delete({ where: { id: params.id } });
 
   void recordAudit({
