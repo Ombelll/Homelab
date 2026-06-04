@@ -101,10 +101,14 @@ export const api = {
       ifIndex: number;
       name: string;
       status: string;
+      adminUp?: boolean;
+      speedMbps?: number;
       rxBps?: number;
       txBps?: number;
       inErrors?: number;
       outErrors?: number;
+      inDiscards?: number;
+      outDiscards?: number;
     }>;
   }) => post("/api/agent/snmp", payload),
 

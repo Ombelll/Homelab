@@ -164,10 +164,14 @@ export const snmpPortSchema = z.object({
   ifIndex: z.number().int().min(0),
   name: z.string().min(1).max(128),
   status: z.string().min(1).max(32),
+  adminUp: z.boolean().optional(),
+  speedMbps: z.number().int().min(0).max(1_000_000).optional(),
   rxBps: z.number().min(0).optional(),
   txBps: z.number().min(0).optional(),
   inErrors: z.number().int().min(0).optional(),
   outErrors: z.number().int().min(0).optional(),
+  inDiscards: z.number().int().min(0).optional(),
+  outDiscards: z.number().int().min(0).optional(),
 });
 
 export const snmpReportSchema = z.object({

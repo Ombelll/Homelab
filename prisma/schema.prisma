@@ -527,10 +527,18 @@ model NetworkPort {
   ifIndex   Int
   name      String // ifName/ifDescr, e.g. "Gi1/0/1"
   status    String // "up" | "down" | other ifOperStatus text
+  adminUp   Boolean? // ifAdminStatus == up (admin-down distinguishes disabled from broken)
+  speedMbps Int? // ifHighSpeed in Mbit/s; 0 when down
   rxBps     Float? // inbound bytes/sec
   txBps     Float? // outbound bytes/sec
   inErrors  Int? // ifInErrors counter (cumulative)
   outErrors Int? // ifOutErrors counter (cumulative)
+  inDiscards  Int? // ifInDiscards counter (cumulative)
+  outDiscards Int? // ifOutDiscards counter (cumulative)
+  // New errors+discards since the previous poll (computed dashboard-side from
+  // the counter delta). This is what the UI shows and the switch alert uses —
+  // a cumulative lifetime total is meaningless for spotting a problem now.
+  errDelta  Int?
   updatedAt DateTime @updatedAt
 
   device NetworkDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)

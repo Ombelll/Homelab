@@ -24,6 +24,12 @@ function formatBps(bps: number | null | undefined): string {
   return `${v.toFixed(v < 10 ? 2 : v < 100 ? 1 : 0)} ${units[i]}`;
 }
 
+function formatSpeed(mbps: number | null | undefined): string {
+  if (mbps == null || mbps <= 0) return "—";
+  if (mbps >= 1000) return `${(mbps / 1000) % 1 === 0 ? mbps / 1000 : (mbps / 1000).toFixed(1)} Gb`;
+  return `${mbps} Mb`;
+}
+
 function formatUptime(sec: number | null | undefined): string {
   if (sec == null) return "—";
   const d = Math.floor(sec / 86400);
@@ -64,6 +70,9 @@ AGENT_SNMP_COMMUNITY=homelab       # SNMP v2c community`}
         <div className="space-y-4">
           {devices.map((dev) => {
             const up = dev.ports.filter((p) => p.status === "up").length;
+            const totalRx = dev.ports.reduce((a, p) => a + (p.rxBps ?? 0), 0);
+            const totalTx = dev.ports.reduce((a, p) => a + (p.txBps ?? 0), 0);
+            const errPorts = dev.ports.filter((p) => (p.errDelta ?? 0) > 0).length;
             return (
               <div key={dev.id} className="overflow-hidden rounded-xl border border-border bg-card">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/30 px-4 py-2.5 text-sm">
@@ -74,8 +83,12 @@ AGENT_SNMP_COMMUNITY=homelab       # SNMP v2c community`}
                       <span className="truncate text-xs text-muted-foreground">· {dev.vendor}</span>
                     ) : null}
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>{up} / {dev.ports.length} ports up</span>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                    <span>{up} / {dev.ports.length} up</span>
+                    <span className="tabular-nums">↓ {formatBps(totalRx)} · ↑ {formatBps(totalTx)}</span>
+                    {errPorts > 0 ? (
+                      <span className="text-warning">{errPorts} port{errPorts === 1 ? "" : "s"} w/ errors</span>
+                    ) : null}
                     <span>uptime {formatUptime(dev.uptimeSec)}</span>
                     <span>seen {formatRelativeTime(dev.lastSeenAt)}</span>
                   </div>
@@ -85,28 +98,44 @@ AGENT_SNMP_COMMUNITY=homelab       # SNMP v2c community`}
                     <tr>
                       <th className="px-4 py-2 text-left font-medium">Port</th>
                       <th className="px-4 py-2 text-left font-medium">Status</th>
+                      <th className="px-4 py-2 text-right font-medium">Speed</th>
                       <th className="px-4 py-2 text-right font-medium">↓ Rx</th>
                       <th className="px-4 py-2 text-right font-medium">↑ Tx</th>
-                      <th className="px-4 py-2 text-right font-medium">Errors</th>
+                      <th className="px-4 py-2 text-right font-medium" title="New errors + discards since the last poll">Errors</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {dev.ports.map((p) => {
-                      const errs = (p.inErrors ?? 0) + (p.outErrors ?? 0);
                       const isUp = p.status === "up";
+                      const disabled = p.adminUp === false;
+                      const recent = p.errDelta ?? 0;
+                      const lifetime =
+                        (p.inErrors ?? 0) + (p.outErrors ?? 0) + (p.inDiscards ?? 0) + (p.outDiscards ?? 0);
+                      // A gigabit-class port that negotiated below 1 Gb is worth flagging.
+                      const slow = isUp && p.speedMbps != null && p.speedMbps > 0 && p.speedMbps < 1000;
+                      const statusLabel = disabled ? "disabled" : p.status;
+                      const statusClass = disabled
+                        ? "bg-muted px-1.5 py-0.5 text-muted-foreground"
+                        : isUp
+                          ? "bg-success/15 px-1.5 py-0.5 text-success"
+                          : "bg-destructive/15 px-1.5 py-0.5 text-destructive";
                       return (
                         <tr key={p.id} className="hover:bg-muted/20">
                           <td className="px-4 py-2 font-mono text-xs">{p.name}</td>
                           <td className="px-4 py-2">
-                            <span
-                              className={
-                                isUp
-                                  ? "rounded bg-success/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-success"
-                                  : "rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground"
-                              }
-                            >
-                              {p.status}
+                            <span className={`rounded text-[10px] uppercase tracking-wide ${statusClass}`}>
+                              {statusLabel}
                             </span>
+                          </td>
+                          <td
+                            className={
+                              slow
+                                ? "px-4 py-2 text-right tabular-nums text-warning"
+                                : "px-4 py-2 text-right tabular-nums text-muted-foreground"
+                            }
+                            title={slow ? "Negotiated below 1 Gb" : undefined}
+                          >
+                            {isUp ? formatSpeed(p.speedMbps) : "—"}
                           </td>
                           <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
                             {isUp ? formatBps(p.rxBps) : "—"}
@@ -116,12 +145,13 @@ AGENT_SNMP_COMMUNITY=homelab       # SNMP v2c community`}
                           </td>
                           <td
                             className={
-                              errs > 0
-                                ? "px-4 py-2 text-right tabular-nums text-warning"
+                              recent > 0
+                                ? "px-4 py-2 text-right tabular-nums font-medium text-warning"
                                 : "px-4 py-2 text-right tabular-nums text-muted-foreground"
                             }
+                            title={`${lifetime} total since boot`}
                           >
-                            {errs > 0 ? errs : "0"}
+                            {recent > 0 ? `+${recent}` : "0"}
                           </td>
                         </tr>
                       );
