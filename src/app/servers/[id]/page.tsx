@@ -81,6 +81,23 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
   const latest = server.metrics[0];
   const cpuPerCore = parseJsonField<number[]>(latest?.cpuPerCore);
 
+  // UPS (NUT) — only the host wired to the UPS reports upsStatus.
+  const upsTokens = (server.upsStatus ?? "").toUpperCase().split(/\s+/).filter(Boolean);
+  const upsOnBattery = upsTokens.includes("OB");
+  const upsLowBattery = upsTokens.includes("LB");
+  const upsLabel = upsLowBattery
+    ? "On battery — LOW"
+    : upsOnBattery
+      ? "On battery"
+      : upsTokens.includes("OL")
+        ? "On mains"
+        : (server.upsStatus ?? "—");
+  const upsTone = upsLowBattery
+    ? "text-destructive"
+    : upsOnBattery
+      ? "text-amber-500"
+      : "text-success";
+
   return (
     <>
       <Link
@@ -187,6 +204,44 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
               ) : (
                 "—"
               )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {server.upsStatus ? (
+        <div className="mb-6 rounded-xl border border-border bg-card p-3 text-xs">
+          <div className="mb-2 text-muted-foreground">
+            UPS{server.upsName ? ` · ${server.upsName}` : ""}
+          </div>
+          <div className="grid gap-2 sm:grid-cols-5">
+            <div>
+              <div className="mb-0.5 text-muted-foreground">Status</div>
+              <div className={`font-medium ${upsTone}`}>{upsLabel}</div>
+            </div>
+            <div>
+              <div className="mb-0.5 text-muted-foreground">Battery</div>
+              <div className="tabular-nums font-medium">
+                {server.upsBatteryPercent != null ? `${server.upsBatteryPercent.toFixed(0)}%` : "—"}
+              </div>
+            </div>
+            <div>
+              <div className="mb-0.5 text-muted-foreground">Load</div>
+              <div className="tabular-nums font-medium">
+                {server.upsLoadPercent != null ? `${server.upsLoadPercent.toFixed(0)}%` : "—"}
+              </div>
+            </div>
+            <div>
+              <div className="mb-0.5 text-muted-foreground">Runtime</div>
+              <div className="tabular-nums font-medium">
+                {server.upsRuntimeSec != null ? `${Math.round(server.upsRuntimeSec / 60)} min` : "—"}
+              </div>
+            </div>
+            <div>
+              <div className="mb-0.5 text-muted-foreground">Input</div>
+              <div className="tabular-nums font-medium">
+                {server.upsInputVoltage != null ? `${server.upsInputVoltage.toFixed(0)} V` : "—"}
+              </div>
             </div>
           </div>
         </div>

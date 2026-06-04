@@ -208,7 +208,8 @@ type StateType =
   | "smart-failed"
   | "disk-mount-high"
   | "backup-stale"
-  | "container-unhealthy";
+  | "container-unhealthy"
+  | "ups-on-battery";
 
 export async function evaluateStateAlerts(input: {
   serverId: string;
@@ -227,7 +228,12 @@ export async function evaluateStateAlerts(input: {
     prisma.disk.findMany({ where: { serverId: input.serverId } }),
     prisma.server.findUnique({
       where: { id: input.serverId },
-      select: { backupAgeHours: true },
+      select: {
+        backupAgeHours: true,
+        upsStatus: true,
+        upsBatteryPercent: true,
+        upsRuntimeSec: true,
+      },
     }),
     prisma.container.findMany({
       where: { serverId: input.serverId },
@@ -248,6 +254,13 @@ export async function evaluateStateAlerts(input: {
   );
   const reason = (c: { status: string; health: string | null }) =>
     c.health === "unhealthy" ? "unhealthy" : "restarting";
+
+  // NUT status flags: OL=on mains, OB=on battery, LB=low battery. We alert
+  // while on battery (mains outage in progress) and escalate to critical at
+  // low battery (host shutdown is imminent).
+  const upsTokens = (server?.upsStatus ?? "").toUpperCase().split(/\s+/).filter(Boolean);
+  const upsOnBattery = upsTokens.includes("OB");
+  const upsLowBattery = upsTokens.includes("LB");
 
   // Per-mount fill, skipping "/" (covered by the disk-high metric alert).
   const mountPct = (d: { totalBytes: number; usedBytes: number }) =>
@@ -329,6 +342,20 @@ export async function evaluateStateAlerts(input: {
       message: `Container issue${badContainers.length === 1 ? "" : "s"} on ${
         input.serverName
       }: ${badContainers.map((c) => `${c.name} (${reason(c)})`).join(", ")}`,
+    }),
+    reconcileState({
+      ...input,
+      inMaintenance,
+      type: "ups-on-battery",
+      breaching: upsOnBattery || upsLowBattery,
+      severity: upsLowBattery ? "critical" : "warning",
+      message: `${input.serverName} is on UPS battery${
+        upsLowBattery ? " — LOW BATTERY, shutdown imminent" : " (mains power lost)"
+      }: ${server?.upsBatteryPercent ?? "?"}% charge${
+        server?.upsRuntimeSec != null
+          ? `, ~${Math.round(server.upsRuntimeSec / 60)} min runtime left`
+          : ""
+      }`,
     }),
   ]);
 }

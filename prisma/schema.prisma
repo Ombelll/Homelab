@@ -51,6 +51,17 @@ model Server {
   rebootRequired      Boolean   @default(false)
   rebootRequiredSince DateTime?
 
+  // UPS state from NUT (`upsc`), reported only by the host wired to the UPS.
+  // upsStatus is the raw NUT flag string ("OL" on mains, "OB" on battery,
+  // "LB" low battery, etc). Drives the ups-on-battery alert. NULL = no UPS.
+  upsName             String?
+  upsStatus           String?
+  upsBatteryPercent   Float?
+  upsLoadPercent      Float?
+  upsRuntimeSec       Int?
+  upsInputVoltage     Float?
+  upsUpdatedAt        DateTime?
+
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 

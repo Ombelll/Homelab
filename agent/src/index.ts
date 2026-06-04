@@ -25,6 +25,7 @@ import { getDiskIoRates } from "./diskio.js";
 import { getTopProcesses } from "./processes.js";
 import { getSmartDevices } from "./smart.js";
 import { getSnmpDevice } from "./snmp.js";
+import { getUps } from "./ups.js";
 import { getZfsPools } from "./zfs.js";
 import { startJobRunner } from "./runner.js";
 
@@ -66,6 +67,7 @@ async function tick() {
     getTopProcesses(), //     12
     getSmartDevices(), //     13
     getBackupAgeHours(), //   14
+    getUps(), //              15
   ]);
   const val = <T>(i: number, fallback: T): T =>
     settled[i].status === "fulfilled"
@@ -89,6 +91,7 @@ async function tick() {
     topProcesses: nonEmpty(val(12, [])),
     smartDevices: nonEmpty(val(13, [])),
     backupAgeHours: val<number | undefined>(14, undefined),
+    ups: val<Awaited<ReturnType<typeof getUps>>>(15, undefined),
     containers: containers ?? undefined,
     disks: nonEmpty(val(4, [])),
     sensors: nonEmpty(val(5, [])),

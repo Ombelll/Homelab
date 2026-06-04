@@ -85,6 +85,17 @@ export async function POST(request: Request) {
         ...(d.diskIoRates ? { diskIoRates: JSON.stringify(d.diskIoRates) } : {}),
         ...(d.topProcesses ? { topProcesses: JSON.stringify(d.topProcesses) } : {}),
         ...(d.backupAgeHours != null ? { backupAgeHours: d.backupAgeHours } : {}),
+        ...(d.ups
+          ? {
+              upsName: d.ups.name,
+              upsStatus: d.ups.status,
+              upsBatteryPercent: d.ups.batteryPercent ?? null,
+              upsLoadPercent: d.ups.loadPercent ?? null,
+              upsRuntimeSec: d.ups.runtimeSec != null ? Math.round(d.ups.runtimeSec) : null,
+              upsInputVoltage: d.ups.inputVoltage ?? null,
+              upsUpdatedAt: new Date(),
+            }
+          : {}),
       },
     }),
   ];

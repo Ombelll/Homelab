@@ -77,6 +77,14 @@ export const api = {
       reallocatedSectors?: number;
       wearPercent?: number;
     }>;
+    ups?: {
+      name: string;
+      status: string;
+      batteryPercent?: number;
+      loadPercent?: number;
+      runtimeSec?: number;
+      inputVoltage?: number;
+    };
     containers?: unknown[];
     disks?: unknown[];
     sensors?: unknown[];

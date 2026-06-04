@@ -123,6 +123,15 @@ export const smartDeviceSchema = z.object({
   wearPercent: z.number().int().min(0).max(255).optional(),
 });
 
+export const upsSchema = z.object({
+  name: z.string().min(1).max(64),
+  status: z.string().min(1).max(64),
+  batteryPercent: z.number().min(0).max(100).optional(),
+  loadPercent: z.number().min(0).max(1000).optional(),
+  runtimeSec: z.number().min(0).optional(),
+  inputVoltage: z.number().min(0).optional(),
+});
+
 // Combined per-tick payload — the agent sends everything in one POST to
 // /api/agent/report instead of five separate calls. Every section beyond the
 // three core gauges is optional, so a partial collection (one collector
@@ -145,6 +154,7 @@ export const reportSchema = z.object({
   sensors: z.array(sensorInputSchema).max(128).optional(),
   zfsPools: z.array(zfsPoolInputSchema).max(64).optional(),
   smartDevices: z.array(smartDeviceSchema).max(64).optional(),
+  ups: upsSchema.optional(),
 });
 
 export type ContainerInput = z.infer<typeof containerInputSchema>;
