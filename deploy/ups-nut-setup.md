@@ -14,6 +14,16 @@ Per the NUT hardware list it speaks the Megatec/Voltronic "Q*" protocol →
 driver `nutdrv_qx` (modern) or `blazer_usb` (older, also fine).
 Ref: https://networkupstools.org/ddl/Greencell/Micropower_600.html
 
+> **Confirmed on this unit (2026-06-04):** `nutdrv_qx` did NOT talk to it;
+> **`blazer_usb` works.** `device.mfr`/`device.model` come back blank (normal
+> for this generic Voltronic board) but `ups.status`, `battery.charge`,
+> `ups.load`, `input.voltage` all report fine.
+
+**Fast path:** instead of the manual steps below, run `deploy/setup-nut.sh`
+on the host — it installs NUT, auto-detects the driver (nutdrv_qx → blazer_usb
+fallback), writes the configs with a generated localhost password, starts the
+daemons, and verifies with `upsc`. The manual steps remain here as reference.
+
 Run everything below as root on the Proxmox host, with the UPS USB cable
 plugged into the host.
 
