@@ -1,5 +1,7 @@
 #!/bin/sh
-# Nightly LOGICAL Postgres backup of the shared database in CT 100.
+# Nightly LOGICAL backup of EVERY database in the shared Postgres (CT 100) —
+# the dashboard plus Vaultwarden / n8n / Forgejo / whatever else lives there —
+# and the cluster roles (passwords/grants).
 #
 # Why, on top of the vzdump CT backup? A vzdump is a whole-container image —
 # great for disaster recovery, clumsy when you just want to restore one table
@@ -62,45 +64,64 @@ command -v pct >/dev/null 2>&1 || fail "pct not found (run on the Proxmox host)"
 pct status "$PG_CT" 2>/dev/null | grep -q running || fail "CT $PG_CT not running"
 
 ts=$(date +%Y%m%d-%H%M%S)
-fname="${PG_DB}-${ts}.dump"
-inct="$IN_CT_DIR/$fname"
-
-log "dumping $PG_DB from CT $PG_CT -> $inct"
 
 # Make the target dir inside the CT and let the postgres role own it.
 pct exec "$PG_CT" -- mkdir -p "$IN_CT_DIR" || fail "mkdir $IN_CT_DIR in CT"
 pct exec "$PG_CT" -- chown "$PG_USER" "$IN_CT_DIR" 2>/dev/null || true
 
-# pg_dump custom format (-Fc): compressed, selective-restore capable. Run as the
-# postgres role via peer auth, so no password is needed or stored.
-if ! pct exec "$PG_CT" -- su -l "$PG_USER" -c "pg_dump -Fc -f '$inct' '$PG_DB'"; then
-  fail "pg_dump returned non-zero"
-fi
+# Discover every real database (skip templates + the empty 'postgres' maint DB).
+# This catches Vaultwarden / n8n / Forgejo / the dashboard — not just one.
+dbs=$(pct exec "$PG_CT" -- su -l "$PG_USER" -c \
+  "psql -tAqc \"SELECT datname FROM pg_database WHERE datistemplate=false AND datname<>'postgres'\"" \
+  2>>"$LOG" | tr -d '\r')
+[ -n "$dbs" ] || dbs="$PG_DB"
+log "databases: $(echo $dbs | tr '\n' ' ')"
 
-# Sanity: a real dump is never a few bytes. Guards against a silent empty dump.
-size=$(pct exec "$PG_CT" -- stat -c %s "$inct" 2>/dev/null || echo 0)
-[ "$size" -ge 1000 ] || fail "dump suspiciously small ($size bytes)"
-log "dump OK ($size bytes)"
+# Cluster-wide roles + grants (passwords!) — needed to restore into a fresh
+# server. Globals only; the per-DB dumps below carry the actual data.
+rolesf="_roles-${ts}.sql"
+pct exec "$PG_CT" -- su -l "$PG_USER" -c "pg_dumpall --roles-only -f '$IN_CT_DIR/$rolesf'" \
+  >>"$LOG" 2>&1 || log "WARN: roles dump failed"
 
-# Optional host copy onto tank (ZFS) for instant restore.
+# pg_dump custom format (-Fc) per database — compressed, selective-restore. Run
+# as the postgres role via peer auth, so no password is needed or stored.
+made=""
+for db in $dbs; do
+  inct="$IN_CT_DIR/${db}-${ts}.dump"
+  if pct exec "$PG_CT" -- su -l "$PG_USER" -c "pg_dump -Fc -f '$inct' '$db'"; then
+    size=$(pct exec "$PG_CT" -- stat -c %s "$inct" 2>/dev/null || echo 0)
+    if [ "$size" -ge 1000 ]; then
+      log "dump OK: $db ($size bytes)"
+      made="$made $db"
+    else
+      log "WARN: $db dump suspiciously small ($size bytes) — skipping"
+    fi
+  else
+    log "WARN: pg_dump failed for $db"
+  fi
+done
+[ -n "$made" ] || fail "no database dumped successfully"
+
+# Optional host copy onto tank (ZFS) for instant restore — every new dump + roles.
 if [ -n "$TANK_DIR" ]; then
   mkdir -p "$TANK_DIR"
-  if pct pull "$PG_CT" "$inct" "$TANK_DIR/$fname" 2>>"$LOG"; then
-    log "copied to $TANK_DIR/$fname"
-  else
-    log "WARN: pct pull to tank failed (in-CT dump still made it)"
-  fi
+  for db in $made; do
+    pct pull "$PG_CT" "$IN_CT_DIR/${db}-${ts}.dump" "$TANK_DIR/${db}-${ts}.dump" 2>>"$LOG" \
+      || log "WARN: tank copy failed for $db"
+  done
+  pct pull "$PG_CT" "$IN_CT_DIR/$rolesf" "$TANK_DIR/$rolesf" 2>>"$LOG" || true
 fi
 
-# Retention: keep the newest $KEEP dumps in each location.
-# In-CT prune
-pct exec "$PG_CT" -- sh -c \
-  "ls -1t '$IN_CT_DIR'/${PG_DB}-*.dump 2>/dev/null | tail -n +$((KEEP + 1)) | xargs -r rm -f" \
-  2>>"$LOG" || true
-# Tank prune
-if [ -n "$TANK_DIR" ] && [ -d "$TANK_DIR" ]; then
-  ls -1t "$TANK_DIR"/${PG_DB}-*.dump 2>/dev/null | tail -n +$((KEEP + 1)) | xargs -r rm -f || true
-fi
+# Retention: keep the newest $KEEP of each database (+ the roles file), per
+# location. Per-db globbing so a noisy DB can't evict another's history.
+prune_ct()   { pct exec "$PG_CT" -- sh -c "ls -1t '$IN_CT_DIR'/$1 2>/dev/null | tail -n +$((KEEP + 1)) | xargs -r rm -f" 2>>"$LOG" || true; }
+prune_tank() { [ -n "$TANK_DIR" ] && [ -d "$TANK_DIR" ] && ls -1t "$TANK_DIR"/$1 2>/dev/null | tail -n +$((KEEP + 1)) | xargs -r rm -f || true; }
+for db in $made; do
+  prune_ct "${db}-*.dump"
+  prune_tank "${db}-*.dump"
+done
+prune_ct "_roles-*.sql"
+prune_tank "_roles-*.sql"
 
-log "pg-backup complete"
+log "pg-backup complete ($(echo $made | wc -w) databases)"
 hc

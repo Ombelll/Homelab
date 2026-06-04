@@ -66,6 +66,40 @@ else
   pct set "$PG_CT" -net0 "${net0},firewall=1"
 fi
 
+# --- Optional: CT 101 (web front-end) -------------------------------------
+# OFF by default: CT 101 serves DNS to the whole LAN and the dashboard to
+# LAN/tailnet, so a wrong rule is a network-wide outage. Enable with
+# INCLUDE_CT101=1. Allows exactly the published service ports + established.
+if [ "${INCLUDE_CT101:-0}" = "1" ]; then
+  WEB_CT="${WEB_CT:-101}"
+  TAILNET="${TAILNET:-100.64.0.0/10}"
+  WEBFW="/etc/pve/firewall/${WEB_CT}.fw"
+  log "writing $WEBFW (published service ports from LAN + tailnet)"
+  cat > "$WEBFW" <<EOF
+[OPTIONS]
+enable: 1
+policy_in: DROP
+policy_out: ACCEPT
+
+[RULES]
+IN ACCEPT -source $LAN -p udp -dport 53 -log nolog # AdGuard DNS (UDP) — LAN
+IN ACCEPT -source $LAN -p tcp -dport 53 -log nolog # AdGuard DNS (TCP) — LAN
+IN ACCEPT -source $LAN -p tcp -dport 80 -log nolog # Traefik (HTTP) — LAN
+IN ACCEPT -source $TAILNET -p tcp -dport 80 -log nolog # Traefik — tailnet
+IN ACCEPT -source $LAN -p tcp -dport 3000 -log nolog # dashboard — LAN
+IN ACCEPT -source $TAILNET -p tcp -dport 3000 -log nolog # dashboard — tailnet
+IN ACCEPT -source $LAN -p tcp -dport 2222 -log nolog # Forgejo SSH — LAN
+IN ACCEPT -source $TAILNET -p tcp -dport 2222 -log nolog # Forgejo SSH — tailnet
+IN ACCEPT -source $LAN -p icmp -log nolog # ping / path-MTU — LAN
+EOF
+  net1=$(pct config "$WEB_CT" | sed -n 's/^net0: //p')
+  if [ -n "$net1" ]; then
+    net1=$(printf '%s' "$net1" | sed 's/,firewall=[01]//')
+    log "setting firewall=1 on CT $WEB_CT net0"
+    pct set "$WEB_CT" -net0 "${net1},firewall=1"
+  fi
+fi
+
 # 4) Compile + reload.
 log "compiling firewall ruleset"
 pve-firewall compile >/dev/null
