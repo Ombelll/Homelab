@@ -48,6 +48,8 @@ model Server {
   // vzdump in /tank/backups/dump). Only the host that owns the backups
   // reports it; drives the backup-stale alert. NULL on hosts without backups.
   backupAgeHours      Float?
+  // Latest whole-package power draw (W) from RAPL; null on non-RAPL hosts.
+  powerWatts          Float?
   rebootRequired      Boolean   @default(false)
   rebootRequiredSince DateTime?
 
@@ -199,6 +201,9 @@ model Metric {
   netBps        Float?
   diskBps       Float?
   maxTempC      Float?
+  // Whole-package power draw (W) from the host's RAPL counter. Null on
+  // non-RAPL hosts / older agents.
+  powerWatts    Float?
   createdAt     DateTime @default(now())
 
   server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)

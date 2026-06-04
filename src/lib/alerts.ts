@@ -209,7 +209,15 @@ type StateType =
   | "disk-mount-high"
   | "backup-stale"
   | "container-unhealthy"
-  | "ups-on-battery";
+  | "ups-on-battery"
+  | "smart-degrading";
+
+// SMART degradation (early warning, before a drive flips to outright failed):
+// reallocated sectors climbing, or an SSD's wear indicator running out.
+const REALLOC_WARN = 10;
+const REALLOC_CRIT = 50;
+const WEAR_WARN = 90;
+const WEAR_CRIT = 95;
 
 export async function evaluateStateAlerts(input: {
   serverId: string;
@@ -245,6 +253,12 @@ export async function evaluateStateAlerts(input: {
   const hotSensors = sensors.filter((s) => s.value >= TEMP_WARNING_C);
   const failedUnits = latest?.failedUnits ?? 0;
   const failingDisks = smart.filter((dv) => !dv.healthy);
+  // Healthy-but-degrading drives: reallocated sectors or SSD wear over threshold.
+  const degrading = smart.filter(
+    (dv) =>
+      dv.healthy &&
+      ((dv.reallocatedSectors ?? 0) >= REALLOC_WARN || (dv.wearPercent ?? 0) >= WEAR_WARN),
+  );
 
   // A container is "in trouble" when its healthcheck reports unhealthy or it's
   // stuck restart-looping. We deliberately do NOT alert on "exited"/"created"/
@@ -342,6 +356,25 @@ export async function evaluateStateAlerts(input: {
       message: `Container issue${badContainers.length === 1 ? "" : "s"} on ${
         input.serverName
       }: ${badContainers.map((c) => `${c.name} (${reason(c)})`).join(", ")}`,
+    }),
+    reconcileState({
+      ...input,
+      inMaintenance,
+      type: "smart-degrading",
+      breaching: degrading.length > 0,
+      severity: degrading.some(
+        (dv) => (dv.reallocatedSectors ?? 0) >= REALLOC_CRIT || (dv.wearPercent ?? 0) >= WEAR_CRIT,
+      )
+        ? "critical"
+        : "warning",
+      message: `SMART degrading on ${input.serverName}: ${degrading
+        .map((dv) => {
+          const bits: string[] = [];
+          if ((dv.reallocatedSectors ?? 0) >= REALLOC_WARN) bits.push(`${dv.reallocatedSectors} reallocated`);
+          if ((dv.wearPercent ?? 0) >= WEAR_WARN) bits.push(`${dv.wearPercent}% wear`);
+          return `${dv.device} (${bits.join(", ")})`;
+        })
+        .join(", ")}`,
     }),
     reconcileState({
       ...input,

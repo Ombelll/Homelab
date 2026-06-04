@@ -74,6 +74,7 @@ export async function POST(request: Request) {
         netBps,
         diskBps,
         maxTempC,
+        powerWatts: d.powerWatts ?? null,
       },
     }),
     prisma.server.update({
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
         ...(d.diskIoRates ? { diskIoRates: JSON.stringify(d.diskIoRates) } : {}),
         ...(d.topProcesses ? { topProcesses: JSON.stringify(d.topProcesses) } : {}),
         ...(d.backupAgeHours != null ? { backupAgeHours: d.backupAgeHours } : {}),
+        ...(d.powerWatts != null ? { powerWatts: d.powerWatts } : {}),
         ...(d.ups
           ? {
               upsName: d.ups.name,

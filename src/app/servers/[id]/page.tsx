@@ -105,6 +105,8 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
     .reverse()
     .map((s) => s.batteryPercent)
     .filter((v): v is number => v != null);
+  // €/kWh for the rough monthly-cost estimate (override via env).
+  const powerPrice = Number(process.env.POWER_PRICE_EUR_PER_KWH ?? "0.34") || 0.34;
 
   return (
     <>
@@ -166,6 +168,22 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
             <div className="mb-0.5 text-muted-foreground">Swap</div>
             <div className="tabular-nums font-medium">
               {latest?.swapPercent != null ? `${latest.swapPercent.toFixed(0)}%` : "—"}
+            </div>
+          </div>
+          <div>
+            <div className="mb-0.5 text-muted-foreground">Power</div>
+            <div className="tabular-nums font-medium">
+              {server.powerWatts != null ? (
+                <>
+                  {server.powerWatts.toFixed(0)} W{" "}
+                  <span className="text-muted-foreground">
+                    · ~{((server.powerWatts * 24) / 1000).toFixed(1)} kWh/d · €
+                    {(((server.powerWatts * 24) / 1000) * 30 * powerPrice).toFixed(0)}/mnd
+                  </span>
+                </>
+              ) : (
+                "—"
+              )}
             </div>
           </div>
           <div>

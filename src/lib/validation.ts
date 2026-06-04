@@ -146,6 +146,7 @@ export const reportSchema = z.object({
   processCount: z.number().int().min(0).optional(),
   failedUnits: z.number().int().min(0).optional(),
   backupAgeHours: z.number().min(0).optional(),
+  powerWatts: z.number().min(0).max(2000).optional(),
   networkRates: z.array(networkRateSchema).max(32).optional(),
   diskIoRates: z.array(diskIoRateSchema).max(64).optional(),
   topProcesses: z.array(topProcessSchema).max(16).optional(),
