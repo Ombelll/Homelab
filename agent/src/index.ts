@@ -27,6 +27,7 @@ import { getSmartDevices } from "./smart.js";
 import { getSnmpDevice } from "./snmp.js";
 import { getUps } from "./ups.js";
 import { getPowerWatts } from "./power.js";
+import { getLogs } from "./logs.js";
 import { getZfsPools } from "./zfs.js";
 import { startJobRunner } from "./runner.js";
 
@@ -155,11 +156,23 @@ async function main() {
     await safeRun(snmpTick, "snmp");
     setInterval(() => safeRun(snmpTick, "snmp"), config.intervalMs);
   }
+
+  // Ship warn/error logs (host journal + container logs) every 5 minutes for
+  // after-the-fact searching in the dashboard.
+  await safeRun(logsTick, "logs");
+  setInterval(() => safeRun(logsTick, "logs"), 5 * 60 * 1000);
 }
 
 async function snmpTick() {
   const device = await getSnmpDevice();
   if (device) await api.reportSnmp(device);
+}
+
+async function logsTick() {
+  const containers = await listDockerContainers();
+  const names = containers ? containers.map((c) => c.name).filter(Boolean) : null;
+  const lines = await getLogs(names);
+  if (lines.length) await api.reportLogs({ hostname: config.hostname, lines });
 }
 
 async function safeRun(fn: () => Promise<void>, label: string) {

@@ -11,6 +11,8 @@ const PUBLIC_PREFIXES = [
   "/api/auth",
   "/api/agent",
   "/api/internal",
+  // Token-gated public status page (the page itself checks STATUS_PAGE_TOKEN).
+  "/status",
 ];
 
 /**

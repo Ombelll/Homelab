@@ -78,6 +78,7 @@ model Server {
   zfsPools           ZfsPool[]
   smartDevices       SmartDevice[]
   upsSamples         UpsSample[]
+  logs               LogEntry[]
 }
 
 // Physical-disk SMART health snapshot from the agent (smartctl). The agent
@@ -539,6 +540,21 @@ model NetworkDevice {
 
   ports   NetworkPort[]
   samples NetworkDeviceSample[]
+}
+
+// Shipped warn/error log lines from the host journal + container logs, for
+// after-the-fact searching. Agent ships on a slow cadence; pruned by retention.
+model LogEntry {
+  id       String   @id @default(cuid())
+  serverId String
+  source   String // container name, or "host"
+  message  String
+  at       DateTime @default(now())
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, at])
+  @@index([at])
 }
 
 // Time-series of UPS battery/load, for the battery sparkline + trend. One row

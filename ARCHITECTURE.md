@@ -77,7 +77,8 @@ backups.
 - **Agent** (`agent/`) on every host → reports CPU/mem/disk/swap/net/disk-IO/ZFS/sensors/top-processes/SMART/containers to `/api/agent/report`. Self-update via a dashboard job. Windows via `install-agent.ps1`, Linux via `install-agent.sh`.
 - **Alerts** — thresholds (CPU/mem/disk/swap) + state alerts (ZFS health, temperature, failed units, SMART, per-mount disk-full, backup-stale, unhealthy/restart-looping containers) → push via **ntfy**.
 - **SNMP** — managed switch (TP-Link SG2008) monitored over SNMP v2c: per-port link speed, admin/oper status, throughput, and a per-interval error/discard *rate* with a `switch-port-errors` alert. Network page. Set `AGENT_SNMP_TARGET` to enable.
-- **Health checks** — service probes (HTTP/TCP/ping) plus `tls` cert-expiry checks that alert ahead of expiry.
+- **Health checks** — service probes (HTTP/TCP/ping) plus `tls` cert-expiry checks that alert ahead of expiry, with per-check 24h uptime % (a ping check to 1.1.1.1 = WAN-uptime monitoring).
+- **Power** — host watts via Intel RAPL → kWh/cost estimate + history. **Logs** — agent ships warn/error lines (host journal + container logs) to a searchable store. **Status page** — optional token-gated public read-only page at `/status/<token>`.
 - **Maintenance jobs** — `/api/internal/{downsample,retention,sweep,run-health-checks,check-image-updates}` driven by a scheduler (cron on CT 101) with `SWEEP_KEY`.
 - **Watchdogs** — external dead-man's switches via healthchecks.io: a CT 101 dashboard-liveness ping (so the alerter's own death is noticed) and a monthly backup restore-test on the host (`deploy/watchdogs.md`).
 

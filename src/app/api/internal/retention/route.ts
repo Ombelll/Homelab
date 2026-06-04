@@ -40,12 +40,13 @@ export async function POST(request: Request) {
   const now = new Date();
   const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-  const [metrics, checkResults, upsSamples, netSamples, alerts, jobs, sessions, invites, audit] =
+  const [metrics, checkResults, upsSamples, netSamples, logs, alerts, jobs, sessions, invites, audit] =
     await prisma.$transaction([
     prisma.metric.deleteMany({ where: { createdAt: { lt: cutoff } } }),
     prisma.healthCheckResult.deleteMany({ where: { at: { lt: cutoff } } }),
     prisma.upsSample.deleteMany({ where: { at: { lt: cutoff } } }),
     prisma.networkDeviceSample.deleteMany({ where: { at: { lt: cutoff } } }),
+    prisma.logEntry.deleteMany({ where: { at: { lt: cutoff } } }),
     prisma.alert.deleteMany({
       where: { resolved: true, createdAt: { lt: cutoff } },
     }),
@@ -76,6 +77,7 @@ export async function POST(request: Request) {
       checkResults: checkResults.count,
       upsSamples: upsSamples.count,
       netSamples: netSamples.count,
+      logs: logs.count,
       alerts: alerts.count,
       jobs: jobs.count,
       sessions: sessions.count,

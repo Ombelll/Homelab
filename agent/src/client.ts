@@ -113,6 +113,12 @@ export const api = {
     }>;
   }) => post("/api/agent/snmp", payload),
 
+  // Shipped warn/error log lines (host journal + container logs).
+  reportLogs: (payload: {
+    hostname: string;
+    lines: Array<{ source: string; message: string; at?: string }>;
+  }) => post("/api/agent/logs", payload),
+
   metrics: (payload: {
     hostname: string;
     cpuPercent: number;

@@ -175,6 +175,17 @@ export const snmpPortSchema = z.object({
   outDiscards: z.number().int().min(0).optional(),
 });
 
+export const logLineSchema = z.object({
+  source: z.string().min(1).max(128),
+  message: z.string().min(1).max(4000),
+  at: z.string().datetime().optional(),
+});
+
+export const logsReportSchema = z.object({
+  hostname: z.string().min(1).max(255),
+  lines: z.array(logLineSchema).max(1000),
+});
+
 export const snmpReportSchema = z.object({
   host: z.string().min(1).max(255),
   name: z.string().min(1).max(255),
