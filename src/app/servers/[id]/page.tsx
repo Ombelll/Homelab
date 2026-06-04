@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { ServerMetricsCharts } from "@/components/server-metrics-charts";
 import { ServerActions } from "@/components/server-actions";
+import { Sparkline } from "@/components/sparkline";
 import { getCurrentUser } from "@/lib/session";
 import { formatRelativeTime } from "@/lib/utils";
 
@@ -28,6 +29,8 @@ async function getData(id: string) {
       // Latest metric row for the extended gauges (swap, per-core CPU,
       // process count, failed units) that aren't on the Server snapshot.
       metrics: { orderBy: { createdAt: "desc" }, take: 1 },
+      // Recent UPS battery samples for the sparkline.
+      upsSamples: { orderBy: { at: "desc" }, take: 60 },
     },
   });
   return server;
@@ -97,6 +100,11 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
     : upsOnBattery
       ? "text-amber-500"
       : "text-success";
+  const upsBatterySpark = server.upsSamples
+    .slice()
+    .reverse()
+    .map((s) => s.batteryPercent)
+    .filter((v): v is number => v != null);
 
   return (
     <>
@@ -244,6 +252,12 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
               </div>
             </div>
           </div>
+          {upsBatterySpark.length >= 2 ? (
+            <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
+              <span>battery</span>
+              <Sparkline values={upsBatterySpark} width={140} height={24} tone="success" />
+            </div>
+          ) : null}
         </div>
       ) : null}
 

@@ -110,6 +110,12 @@ export async function POST(request: Request) {
       where: { deviceId: device.id, ifIndex: { notIn: Array.from(indexes) } },
     }),
   );
+  // Total-throughput history point (summed across ports) for the traffic spark.
+  const totRx = d.ports.reduce((a, p) => a + (p.rxBps ?? 0), 0);
+  const totTx = d.ports.reduce((a, p) => a + (p.txBps ?? 0), 0);
+  ops.push(
+    prisma.networkDeviceSample.create({ data: { deviceId: device.id, rxBps: totRx, txBps: totTx } }),
+  );
   await prisma.$transaction(ops);
 
   // Service-scoped alert (serverId null) for ports racking up errors/discards.

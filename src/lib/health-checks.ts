@@ -197,6 +197,11 @@ export async function runDueChecks(): Promise<{ ran: number; flipped: number }> 
 
     const certExpiresAt = result.ok && result.certExpiresAt ? result.certExpiresAt : undefined;
 
+    // History row behind uptime % + the latency graph (pruned by retention).
+    await prisma.healthCheckResult.create({
+      data: { checkId: c.id, ok: result.ok, latencyMs: result.latencyMs ?? null },
+    });
+
     await prisma.healthCheck.update({
       where: { id: c.id },
       data: {

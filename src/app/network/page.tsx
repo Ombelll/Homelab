@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
+import { Sparkline } from "@/components/sparkline";
 import { formatRelativeTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +8,10 @@ export const dynamic = "force-dynamic";
 async function getDevices() {
   return prisma.networkDevice.findMany({
     orderBy: { name: "asc" },
-    include: { ports: { orderBy: { ifIndex: "asc" } } },
+    include: {
+      ports: { orderBy: { ifIndex: "asc" } },
+      samples: { orderBy: { at: "desc" }, take: 60 },
+    },
   });
 }
 
@@ -73,6 +77,11 @@ AGENT_SNMP_COMMUNITY=homelab       # SNMP v2c community`}
             const totalRx = dev.ports.reduce((a, p) => a + (p.rxBps ?? 0), 0);
             const totalTx = dev.ports.reduce((a, p) => a + (p.txBps ?? 0), 0);
             const errPorts = dev.ports.filter((p) => (p.errDelta ?? 0) > 0).length;
+            // Total-throughput trend (last ~60 polls), normalised to 0–100 for
+            // the fixed-axis sparkline.
+            const series = dev.samples.slice().reverse().map((s) => s.rxBps + s.txBps);
+            const sMax = Math.max(1, ...series);
+            const spark = series.map((v) => (v / sMax) * 100);
             return (
               <div key={dev.id} className="overflow-hidden rounded-xl border border-border bg-card">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/30 px-4 py-2.5 text-sm">
@@ -86,6 +95,7 @@ AGENT_SNMP_COMMUNITY=homelab       # SNMP v2c community`}
                   <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                     <span>{up} / {dev.ports.length} up</span>
                     <span className="tabular-nums">↓ {formatBps(totalRx)} · ↑ {formatBps(totalTx)}</span>
+                    {spark.length >= 2 ? <Sparkline values={spark} width={90} height={20} tone="primary" /> : null}
                     {errPorts > 0 ? (
                       <span className="text-warning">{errPorts} port{errPorts === 1 ? "" : "s"} w/ errors</span>
                     ) : null}

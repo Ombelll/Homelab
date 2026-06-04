@@ -208,6 +208,10 @@ Two internal endpoints, both gated by `SWEEP_KEY` (open if unset):
 # Image updates: check Docker Hub for newer image digests (every 6h per image).
 0 4 * * *  curl -fsS -X POST http://dashboard/api/internal/check-image-updates \
   -H "x-sweep-key: $SWEEP_KEY" > /dev/null
+
+# Digest (optional): a health summary to all notification channels. Daily 08:00.
+0 8 * * *  curl -fsS -X POST http://dashboard/api/internal/digest \
+  -H "x-sweep-key: $SWEEP_KEY" > /dev/null
 ```
 
 The downsample job must run before the retention job for any given hour

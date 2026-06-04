@@ -75,6 +75,7 @@ model Server {
   maintenanceWindows MaintenanceWindow[]
   zfsPools           ZfsPool[]
   smartDevices       SmartDevice[]
+  upsSamples         UpsSample[]
 }
 
 // Physical-disk SMART health snapshot from the agent (smartctl). The agent
@@ -360,6 +361,23 @@ model HealthCheck {
   certExpiresAt   DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  results HealthCheckResult[]
+}
+
+// One row per probe — the history behind a check's uptime % and latency graph.
+// Pruned by the retention job. A ping check to 1.1.1.1 / the gateway turns this
+// into WAN-uptime + latency monitoring.
+model HealthCheckResult {
+  id        String   @id @default(cuid())
+  checkId   String
+  ok        Boolean
+  latencyMs Int?
+  at        DateTime @default(now())
+
+  check HealthCheck @relation(fields: [checkId], references: [id], onDelete: Cascade)
+
+  @@index([checkId, at])
 }
 
 model Alert {
@@ -514,7 +532,38 @@ model NetworkDevice {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
-  ports NetworkPort[]
+  ports   NetworkPort[]
+  samples NetworkDeviceSample[]
+}
+
+// Time-series of UPS battery/load, for the battery sparkline + trend. One row
+// per agent report from the host wired to the UPS. Pruned by retention.
+model UpsSample {
+  id             String   @id @default(cuid())
+  serverId       String
+  status         String?
+  batteryPercent Float?
+  loadPercent    Float?
+  runtimeSec     Int?
+  at             DateTime @default(now())
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, at])
+}
+
+// Time-series of a switch's TOTAL throughput (summed across ports), for the
+// traffic sparkline. One row per SNMP poll. Pruned by retention.
+model NetworkDeviceSample {
+  id       String   @id @default(cuid())
+  deviceId String
+  rxBps    Float
+  txBps    Float
+  at       DateTime @default(now())
+
+  device NetworkDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, at])
 }
 
 // One physical/logical interface of a NetworkDevice. Throughput is the

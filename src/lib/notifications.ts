@@ -65,6 +65,20 @@ export type AlertNotification = {
   createdAt: Date;
 };
 
+/**
+ * Quiet hours: during the window set by QUIET_HOURS_START/END ("HH:MM", local
+ * time, may wrap midnight) only `critical` alerts are pushed — warnings/info
+ * are still recorded as alerts, just not sent until the window ends. Lets you
+ * sleep without a 3am ntfy buzz for a transient warning. Unset = always notify.
+ */
+export function inQuietHours(now: Date = new Date()): boolean {
+  const start = process.env.QUIET_HOURS_START?.trim();
+  const end = process.env.QUIET_HOURS_END?.trim();
+  if (!start || !end) return false;
+  const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  return start <= end ? hhmm >= start && hhmm < end : hhmm >= start || hhmm < end;
+}
+
 const SECRET_KEYS = new Set(["webhookUrl", "token", "url", "headers", "password"]);
 
 /**
@@ -106,6 +120,12 @@ export function redactConfig(type: ChannelType, raw: unknown): unknown {
  * metrics ingest path.
  */
 export async function notifyAlert(alert: AlertNotification): Promise<void> {
+  // During quiet hours, only critical alerts are pushed. The alert row is
+  // already persisted by the caller — we only suppress the outbound notify.
+  if (inQuietHours() && (SEVERITY_RANK[alert.severity] ?? 0) < SEVERITY_RANK.critical) {
+    return;
+  }
+
   const channels = await prisma.notificationChannel.findMany({
     where: { enabled: true },
   });

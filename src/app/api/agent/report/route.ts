@@ -100,6 +100,20 @@ export async function POST(request: Request) {
     }),
   ];
 
+  if (d.ups) {
+    ops.push(
+      prisma.upsSample.create({
+        data: {
+          serverId,
+          status: d.ups.status,
+          batteryPercent: d.ups.batteryPercent ?? null,
+          loadPercent: d.ups.loadPercent ?? null,
+          runtimeSec: d.ups.runtimeSec != null ? Math.round(d.ups.runtimeSec) : null,
+        },
+      }),
+    );
+  }
+
   if (d.containers) {
     const ids = new Set(d.containers.map((c) => c.dockerId));
     const now = new Date();

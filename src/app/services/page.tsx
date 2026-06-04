@@ -6,10 +6,24 @@ import { getCurrentUser } from "@/lib/session";
 export const dynamic = "force-dynamic";
 
 export default async function ServicesPage() {
-  const [user, checks] = await Promise.all([
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const [user, checks, totals, oks] = await Promise.all([
     getCurrentUser(),
     prisma.healthCheck.findMany({ orderBy: { createdAt: "asc" } }),
+    prisma.healthCheckResult.groupBy({ by: ["checkId"], where: { at: { gte: since } }, _count: { _all: true } }),
+    prisma.healthCheckResult.groupBy({
+      by: ["checkId"],
+      where: { at: { gte: since }, ok: true },
+      _count: { _all: true },
+    }),
   ]);
+  const totalBy = new Map(totals.map((t) => [t.checkId, t._count._all]));
+  const okBy = new Map(oks.map((t) => [t.checkId, t._count._all]));
+  const uptime24 = (id: string): number | null => {
+    const total = totalBy.get(id) ?? 0;
+    if (total === 0) return null;
+    return Math.round(((okBy.get(id) ?? 0) / total) * 1000) / 10;
+  };
   const canEdit = user?.role === "admin";
   return (
     <>
@@ -32,6 +46,7 @@ export default async function ServicesPage() {
           lastCheckedAt: c.lastCheckedAt?.toISOString() ?? null,
           lastError: c.lastError,
           certExpiresAt: c.certExpiresAt?.toISOString() ?? null,
+          uptime24: uptime24(c.id),
         }))}
         canEdit={canEdit}
       />

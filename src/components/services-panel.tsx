@@ -19,6 +19,7 @@ type Check = {
   lastCheckedAt: string | null;
   lastError: string | null;
   certExpiresAt: string | null;
+  uptime24: number | null;
 };
 
 export function ServicesPanel({
@@ -116,6 +117,7 @@ export function ServicesPanel({
                 <Th>Type</Th>
                 <Th>Target</Th>
                 <Th>Status</Th>
+                <Th>Uptime 24h</Th>
                 <Th>Latency</Th>
                 <Th>Last checked</Th>
                 <Th className="text-right">Actions</Th>
@@ -144,6 +146,23 @@ export function ServicesPanel({
                           {c.lastError}
                         </div>
                       ) : null}
+                    </Td>
+                    <Td className="tabular-nums">
+                      {c.uptime24 == null ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        <span
+                          className={
+                            c.uptime24 >= 99.5
+                              ? "text-success"
+                              : c.uptime24 >= 95
+                                ? "text-amber-500"
+                                : "text-destructive"
+                          }
+                        >
+                          {c.uptime24}%
+                        </span>
+                      )}
                     </Td>
                     <Td className="text-muted-foreground">
                       {c.lastLatencyMs != null ? `${c.lastLatencyMs} ms` : "—"}
