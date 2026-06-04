@@ -88,6 +88,17 @@ AGENT_SERVER_NAME=${AGENT_SERVER_NAME:-$(hostname)}
 # Optional: metrics interval in seconds (default 30, minimum 5)
 AGENT_INTERVAL_SECONDS=${AGENT_INTERVAL_SECONDS:-30}
 EOF
+
+# Preserve optional integration settings across re-runs. These aren't prompted
+# (so the base heredoc above doesn't know them), but they live in $ENV_FILE and
+# were sourced in step 4 — re-emit any that are set so a code update never wipes
+# SNMP polling / UPS / backup config. (Bug fix: a bare re-run used to drop them.)
+for _var in AGENT_SNMP_TARGET AGENT_SNMP_COMMUNITY AGENT_BACKUP_DIR \
+            AGENT_REQUEST_TIMEOUT_SECONDS AGENT_UPS_NAME; do
+  _val="${!_var:-}"
+  [ -n "$_val" ] && printf '%s=%s\n' "$_var" "$_val" >> "$ENV_FILE"
+done
+
 chmod 600 "$ENV_FILE"
 chown root:root "$ENV_FILE"
 log "Wrote $ENV_FILE (0600) — secret not echoed"
