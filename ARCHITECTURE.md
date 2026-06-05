@@ -58,6 +58,9 @@ backups.
 | **n8n** | Workflow automation | `n8n.lan` |
 | **Forgejo** | Self-hosted Git | `git.lan`, SSH :2222 |
 | **Uptime Kuma** | Uptime/health monitoring | `uptime.lan` |
+| **Jellyfin** | Media server (movies/series); iGPU QuickSync transcoding; library on `tank` | `jellyfin.lan` |
+| **Nextcloud** | Files/calendar/contacts (on shared Postgres + Redis); data on `tank` | `nextcloud.lan` |
+| **Homepage** | Start page linking all services (config in git) | `home.lan` |
 | **Watchtower** (+ socket-proxy) | Image-update monitoring (monitor-only) | — |
 
 ## Storage & backups (3-2-1)

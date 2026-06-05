@@ -1,0 +1,3 @@
+# Optional: point Homepage at a Docker socket-proxy to show live container
+# status next to each service. Left empty by design — we don't expose the raw
+# Docker socket. Wire it to the existing scoped socket-proxy later if wanted.

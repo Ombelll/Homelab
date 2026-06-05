@@ -1,0 +1,14 @@
+# Top-of-page widgets. Search + a clock + resource glances.
+- search:
+    provider: duckduckgo
+    target: _blank
+- datetime:
+    text_size: xl
+    format:
+      timeStyle: short
+      dateStyle: long
+- openmeteo:
+    label: Weather
+    timezone: Europe/Amsterdam
+    units: metric
+    cache: 5

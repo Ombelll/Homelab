@@ -1,0 +1,52 @@
+# Your services, grouped. Edit freely — it's just yaml in git.
+# `href` uses the *.lan names (resolved by AdGuard) where applicable.
+
+- Infrastructure:
+    - Dashboard (monitoring):
+        href: https://proxmox-01.tailf562d8.ts.net
+        description: Homelab Control Center — metrics, alerts, backups
+        icon: mdi-monitor-dashboard
+    - Proxmox VE:
+        href: https://192.168.1.10:8006
+        description: Hypervisor — host, CTs, storage
+        icon: proxmox
+    - Uptime Kuma:
+        href: http://uptime.lan
+        description: App uptime monitoring
+        icon: uptime-kuma
+
+- Apps:
+    - Immich:
+        href: http://immich.lan
+        description: Photo & video backup
+        icon: immich
+    - Jellyfin:
+        href: http://jellyfin.lan
+        description: Movies & series
+        icon: jellyfin
+    - Nextcloud:
+        href: http://nextcloud.lan
+        description: Files, calendar, contacts
+        icon: nextcloud
+    - Vaultwarden:
+        href: https://docker.tailf562d8.ts.net
+        description: Passwords (Bitwarden-compatible)
+        icon: bitwarden
+    - n8n:
+        href: http://n8n.lan
+        description: Workflow automation
+        icon: n8n
+    - Forgejo:
+        href: http://git.lan
+        description: Self-hosted Git
+        icon: forgejo
+
+- Network & Admin:
+    - AdGuard Home:
+        href: http://192.168.1.21:3000
+        description: Network DNS + ad/tracker blocking
+        icon: adguard-home
+    - Traefik:
+        href: http://192.168.1.21:8080
+        description: Reverse proxy dashboard
+        icon: traefik

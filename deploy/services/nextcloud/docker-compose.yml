@@ -1,0 +1,60 @@
+# Nextcloud — files, calendar, contacts, etc. Reached at nextcloud.lan.
+#
+# Uses the SHARED Postgres on CT 100 (192.168.1.20) — create the DB once (see
+# deploy/fase-6-services.md) — plus a small dedicated Redis for file locking and
+# caching. App + user data live on the `tank` pool via /mnt/nextcloud.
+#
+# Set NEXTCLOUD_* in the repo-root .env, then from the repo root on CT 101:
+#   docker compose --env-file .env -f deploy/services/nextcloud/docker-compose.yml up -d
+
+services:
+  nextcloud:
+    image: nextcloud:stable-apache
+    container_name: nextcloud
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /mnt/nextcloud:/var/www/html       # app + data on tank
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      POSTGRES_HOST: 192.168.1.20
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: "${NEXTCLOUD_DB_PASSWORD:?set in .env}"
+      REDIS_HOST: nextcloud-redis
+      NEXTCLOUD_ADMIN_USER: "${NEXTCLOUD_ADMIN_USER:-admin}"
+      NEXTCLOUD_ADMIN_PASSWORD: "${NEXTCLOUD_ADMIN_PASSWORD:?set in .env}"
+      NEXTCLOUD_TRUSTED_DOMAINS: "nextcloud.lan"
+      # Behind Traefik on the LAN (http). Tells Nextcloud the real client URL.
+      OVERWRITECLIURL: "http://nextcloud.lan"
+      # Trust the Docker proxy network so client IPs / rate-limits work. Adjust
+      # if your `proxy` network uses a different subnet (docker network inspect proxy).
+      TRUSTED_PROXIES: "172.16.0.0/12"
+    depends_on:
+      - nextcloud-redis
+    networks:
+      - proxy
+      - nextcloud
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.nextcloud.rule=Host(`nextcloud.lan`)"
+      - "traefik.http.routers.nextcloud.entrypoints=web"
+      - "traefik.http.routers.nextcloud.middlewares=security-headers@file"
+      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+
+  nextcloud-redis:
+    image: docker.io/valkey/valkey:8-bookworm
+    container_name: nextcloud-redis
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - nextcloud
+
+networks:
+  proxy:
+    external: true
+  nextcloud:
+    driver: bridge

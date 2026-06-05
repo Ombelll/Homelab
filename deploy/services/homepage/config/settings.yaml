@@ -1,0 +1,14 @@
+title: Homelab Control Center
+theme: dark
+color: slate
+headerStyle: clean
+layout:
+  Infrastructure:
+    style: row
+    columns: 3
+  Apps:
+    style: row
+    columns: 3
+  Network & Admin:
+    style: row
+    columns: 3

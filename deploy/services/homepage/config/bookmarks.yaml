@@ -1,0 +1,10 @@
+- Homelab:
+    - Repo (GitHub):
+        - abbr: GH
+          href: https://github.com/Ombelll/Homelab
+    - Proxmox docs:
+        - abbr: PVE
+          href: https://pve.proxmox.com/pve-docs/
+    - Tailscale admin:
+        - abbr: TS
+          href: https://login.tailscale.com/admin

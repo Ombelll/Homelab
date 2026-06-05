@@ -1,0 +1,33 @@
+# Homepage — one start page that links (and live-monitors) all your services.
+# Reached at home.lan. Config lives in this repo (config/ next to this file), so
+# edits are version-controlled — change a yaml, `git pull`, recreate.
+#
+# From the repo root on CT 101:
+#   docker compose -f deploy/services/homepage/docker-compose.yml up -d
+
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      # Newer Homepage refuses requests with an unexpected Host header; allow
+      # the LAN name and the tailnet name it's served under.
+      HOMEPAGE_ALLOWED_HOSTS: "home.lan,proxmox-01.tailf562d8.ts.net"
+    volumes:
+      - /opt/Homelab/deploy/services/homepage/config:/app/config:ro
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.homepage.rule=Host(`home.lan`)"
+      - "traefik.http.routers.homepage.entrypoints=web"
+      - "traefik.http.routers.homepage.middlewares=security-headers@file"
+      - "traefik.http.services.homepage.loadbalancer.server.port=3000"
+
+networks:
+  proxy:
+    external: true

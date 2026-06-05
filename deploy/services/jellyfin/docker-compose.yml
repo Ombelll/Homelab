@@ -1,0 +1,52 @@
+# Jellyfin — self-hosted media server (movies / series), reached at jellyfin.lan.
+#
+# Hardware transcoding via the Intel UHD 630 iGPU (QuickSync) — needs /dev/dri
+# passed into CT 101 first (see deploy/fase-6-services.md). If you DON'T want to
+# bother with that yet, delete the `devices:` and `group_add:` blocks below and
+# Jellyfin falls back to (slower) CPU transcoding — it still works fine.
+#
+# Media lives on the `tank` ZFS pool (not the 32 GB CT rootfs) via the /mnt/media
+# bind mount. One-time setup is in the runbook. From the repo root on CT 101:
+#   docker compose -f deploy/services/jellyfin/docker-compose.yml up -d
+
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+    # --- Intel QuickSync hardware transcoding (optional; remove if no /dev/dri) ---
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      # Must match the HOST's "render" group GID so the container can use the
+      # iGPU. Find it with `getent group render` on the host (often 104/993) and
+      # put the NUMBER here. "video" (44) is usually fine by name.
+      - "video"
+      - "render"
+    # ---------------------------------------------------------------------------
+
+    volumes:
+      - jellyfin-config:/config
+      - jellyfin-cache:/cache
+      - /mnt/media:/media:ro        # your library on tank, read-only
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.jellyfin.rule=Host(`jellyfin.lan`)"
+      - "traefik.http.routers.jellyfin.entrypoints=web"
+      - "traefik.http.routers.jellyfin.middlewares=security-headers@file"
+      - "traefik.http.services.jellyfin.loadbalancer.server.port=8096"
+
+volumes:
+  jellyfin-config:
+  jellyfin-cache:
+
+networks:
+  proxy:
+    external: true
