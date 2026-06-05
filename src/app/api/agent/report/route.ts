@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { unauthorized, verifyAgentKey } from "@/lib/auth";
 import { reportSchema } from "@/lib/validation";
 import { evaluateMetricAlerts, evaluateStateAlerts } from "@/lib/alerts";
+import { notifyAlert } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +87,7 @@ export async function POST(request: Request) {
         ...(d.diskIoRates ? { diskIoRates: JSON.stringify(d.diskIoRates) } : {}),
         ...(d.topProcesses ? { topProcesses: JSON.stringify(d.topProcesses) } : {}),
         ...(d.backupAgeHours != null ? { backupAgeHours: d.backupAgeHours } : {}),
+        ...(d.backupBytes != null ? { backupBytes: d.backupBytes } : {}),
         ...(d.powerWatts != null ? { powerWatts: d.powerWatts } : {}),
         ...(d.ups
           ? {
@@ -155,6 +157,12 @@ export async function POST(request: Request) {
         where: { serverId, dockerId: { notIn: Array.from(ids) } },
       }),
     );
+    // Per-container CPU/mem time-series (history → sparkline on the containers
+    // page). Only sample containers that actually reported stats.
+    const samples = d.containers
+      .filter((c) => c.cpuPercent != null || c.memoryBytes != null)
+      .map((c) => ({ serverId, name: c.name, cpuPercent: c.cpuPercent ?? null, memoryBytes: c.memoryBytes ?? null }));
+    if (samples.length > 0) ops.push(prisma.containerSample.createMany({ data: samples }));
   }
 
   if (d.disks) {
@@ -262,6 +270,39 @@ export async function POST(request: Request) {
   // units), so they run after the transaction commits.
   await evaluateStateAlerts({ serverId, serverName: server.name });
 
+  // Backup-size anomaly: a newest backup that's suddenly far smaller than the
+  // last one we saw is a classic sign of a truncated / half-failed dump. We
+  // compare the incoming size against the previously-stored value (server was
+  // fetched before the update above). One open alert per server.
+  if (
+    d.backupBytes != null &&
+    server.backupBytes != null &&
+    server.backupBytes > 50 * 1024 * 1024 &&
+    d.backupBytes < server.backupBytes * 0.6
+  ) {
+    const open = await prisma.alert.findFirst({
+      where: { serverId, type: "backup-shrink", resolved: false },
+    });
+    if (!open) {
+      const pct = Math.round((1 - d.backupBytes / server.backupBytes) * 100);
+      const created = await prisma.alert.create({
+        data: {
+          serverId,
+          type: "backup-shrink",
+          severity: "warning",
+          message: `Newest backup on ${server.name} shrank ${pct}% (${fmtBytes(d.backupBytes)} vs ${fmtBytes(server.backupBytes)}) — possible truncated/failed dump`,
+        },
+      });
+      void notifyAlert({
+        type: created.type,
+        severity: created.severity,
+        message: created.message,
+        serverName: server.name,
+        createdAt: created.createdAt,
+      });
+    }
+  }
+
   return NextResponse.json({ ok: true, status });
 }
 
@@ -269,4 +310,15 @@ function deriveStatus(cpu: number, mem: number, disk: number) {
   if (cpu >= 95 || mem >= 95 || disk >= 95) return "critical";
   if (cpu >= 80 || mem >= 85 || disk >= 85) return "warning";
   return "online";
+}
+
+function fmtBytes(n: number): string {
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+  let v = n;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
 }

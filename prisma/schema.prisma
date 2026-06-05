@@ -48,6 +48,10 @@ model Server {
   // vzdump in /tank/backups/dump). Only the host that owns the backups
   // reports it; drives the backup-stale alert. NULL on hosts without backups.
   backupAgeHours      Float?
+  // Size (bytes) of the newest backup archive — tracked so a new backup that's
+  // suddenly much smaller (truncated / half-failed dump) trips an alert, not
+  // just an old one. NULL on hosts without backups.
+  backupBytes         Float?
   // Latest whole-package power draw (W) from RAPL; null on non-RAPL hosts.
   powerWatts          Float?
   rebootRequired      Boolean   @default(false)
@@ -80,6 +84,23 @@ model Server {
   upsSamples         UpsSample[]
   logs               LogEntry[]
   capacitySamples    CapacitySample[]
+  containerSamples   ContainerSample[]
+}
+
+// Time-series of per-container CPU/memory, so a spike can be traced to the
+// specific container that caused it (the Container row only holds the latest
+// snapshot). Written each report tick; pruned by the retention job.
+model ContainerSample {
+  id          String   @id @default(cuid())
+  serverId    String
+  name        String
+  cpuPercent  Float?
+  memoryBytes Float?
+  at          DateTime @default(now())
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, name, at])
 }
 
 // Hourly snapshot of per-mount / per-pool usage, so we can fit a growth trend

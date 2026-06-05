@@ -212,7 +212,8 @@ type StateType =
   | "container-unhealthy"
   | "ups-on-battery"
   | "smart-degrading"
-  | "capacity-forecast";
+  | "capacity-forecast"
+  | "memory-leak";
 
 // SMART degradation (early warning, before a drive flips to outright failed):
 // reallocated sectors climbing, or an SSD's wear indicator running out.
@@ -235,13 +236,50 @@ function selfTestFailed(status: string | null | undefined): boolean {
 // within this many days at its current growth rate; critical when very soon.
 const FORECAST_WARN_DAYS = 30;
 const FORECAST_CRIT_DAYS = 14;
+// Memory-leak heuristic: a sustained upward trend in memory% (not a transient
+// spike). Needs real climb (≥ this %/day), already-elevated usage, and a
+// projected hit of ~95% within the horizon. Critical if that's imminent.
+const MEM_LEAK_MIN_SLOPE_PER_DAY = 3;
+const MEM_LEAK_MIN_CURRENT = 60;
+const MEM_LEAK_WARN_DAYS = 14;
+const MEM_LEAK_CRIT_DAYS = 3;
+
+// Least-squares slope (%/day) of memory over time + projected days to 95%.
+// Returns null when there isn't enough spread or the trend is flat/down.
+function memoryLeakForecast(
+  points: Array<{ memoryPercent: number; createdAt: Date }>,
+): { slopePerDay: number; daysTo95: number; current: number } | null {
+  if (points.length < 8) return null;
+  const t0 = points[0].createdAt.getTime();
+  const xs = points.map((p) => (p.createdAt.getTime() - t0) / 86_400_000); // days
+  const ys = points.map((p) => p.memoryPercent);
+  const spanDays = xs[xs.length - 1];
+  if (spanDays < 0.5) return null; // need at least ~12h of data
+  const n = xs.length;
+  const mx = xs.reduce((a, b) => a + b, 0) / n;
+  const my = ys.reduce((a, b) => a + b, 0) / n;
+  let num = 0;
+  let den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (xs[i] - mx) * (ys[i] - my);
+    den += (xs[i] - mx) ** 2;
+  }
+  if (den === 0) return null;
+  const slopePerDay = num / den;
+  const current = ys[ys.length - 1];
+  if (slopePerDay < MEM_LEAK_MIN_SLOPE_PER_DAY || current < MEM_LEAK_MIN_CURRENT) return null;
+  const daysTo95 = (95 - current) / slopePerDay;
+  if (!Number.isFinite(daysTo95) || daysTo95 <= 0) return null;
+  return { slopePerDay, daysTo95, current };
+}
 
 export async function evaluateStateAlerts(input: {
   serverId: string;
   serverName: string;
 }): Promise<void> {
   const inMaintenance = await isInMaintenance(input.serverId);
-  const [pools, sensors, latest, smart, disks, server, containers] = await Promise.all([
+  const memSince = new Date(Date.now() - 48 * 60 * 60 * 1000);
+  const [pools, sensors, latest, smart, disks, server, memHistory, containers] = await Promise.all([
     prisma.zfsPool.findMany({ where: { serverId: input.serverId } }),
     prisma.sensor.findMany({ where: { serverId: input.serverId, kind: "temperature" } }),
     prisma.metric.findFirst({
@@ -259,6 +297,11 @@ export async function evaluateStateAlerts(input: {
         upsBatteryPercent: true,
         upsRuntimeSec: true,
       },
+    }),
+    prisma.metric.findMany({
+      where: { serverId: input.serverId, createdAt: { gte: memSince } },
+      orderBy: { createdAt: "asc" },
+      select: { memoryPercent: true, createdAt: true },
     }),
     prisma.container.findMany({
       where: { serverId: input.serverId },
@@ -295,6 +338,9 @@ export async function evaluateStateAlerts(input: {
   const fillingSoon = [...forecasts.entries()]
     .filter(([, f]) => f.etaDays <= FORECAST_WARN_DAYS)
     .sort((a, b) => a[1].etaDays - b[1].etaDays);
+
+  // Memory-leak trend over the last 48h.
+  const memLeak = memoryLeakForecast(memHistory);
 
   // A container is "in trouble" when its healthcheck reports unhealthy or it's
   // stuck restart-looping. We deliberately do NOT alert on "exited"/"created"/
@@ -470,6 +516,16 @@ export async function evaluateStateAlerts(input: {
       message: `Filling up on ${input.serverName}: ${fillingSoon
         .map(([key, f]) => `${key.replace(/^(disk|zfs):/, "")} full in ~${Math.round(f.etaDays)}d`)
         .join(", ")}`,
+    }),
+    reconcileState({
+      ...input,
+      inMaintenance,
+      type: "memory-leak",
+      breaching: memLeak != null && memLeak.daysTo95 <= MEM_LEAK_WARN_DAYS,
+      severity: memLeak != null && memLeak.daysTo95 <= MEM_LEAK_CRIT_DAYS ? "critical" : "warning",
+      message: memLeak
+        ? `Memory trending up on ${input.serverName}: ${memLeak.current.toFixed(0)}% and climbing ~${memLeak.slopePerDay.toFixed(1)}%/day → ~95% in ${Math.round(memLeak.daysTo95)}d (possible leak)`
+        : `Memory trend normal on ${input.serverName}`,
     }),
   ]);
 }

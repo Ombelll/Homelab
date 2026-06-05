@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { ContainerActions } from "@/components/container-actions";
+import { Sparkline } from "@/components/sparkline";
 import { getCurrentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -9,10 +10,26 @@ export const dynamic = "force-dynamic";
 type Port = { host?: string; container: string; protocol?: string };
 
 async function getContainers() {
-  const rows = await prisma.container.findMany({
-    orderBy: [{ composeProject: "asc" }, { status: "asc" }, { name: "asc" }],
-    include: { server: { select: { name: true, hostname: true } } },
-  });
+  const since = new Date(Date.now() - 6 * 60 * 60 * 1000);
+  const [rows, samples] = await Promise.all([
+    prisma.container.findMany({
+      orderBy: [{ composeProject: "asc" }, { status: "asc" }, { name: "asc" }],
+      include: { server: { select: { name: true, hostname: true } } },
+    }),
+    prisma.containerSample.findMany({
+      where: { at: { gte: since } },
+      select: { serverId: true, name: true, cpuPercent: true, memoryBytes: true },
+      orderBy: { at: "asc" },
+    }),
+  ]);
+  // Bucket the last 6h of samples per (server, container).
+  const cpuBy = new Map<string, number[]>();
+  const memBy = new Map<string, number[]>();
+  for (const s of samples) {
+    const k = `${s.serverId}::${s.name}`;
+    if (s.cpuPercent != null) (cpuBy.get(k) ?? cpuBy.set(k, []).get(k)!).push(s.cpuPercent);
+    if (s.memoryBytes != null) (memBy.get(k) ?? memBy.set(k, []).get(k)!).push(s.memoryBytes);
+  }
   return rows.map((c) => {
     let ports: Port[] = [];
     try {
@@ -21,7 +38,8 @@ async function getContainers() {
     } catch {
       ports = [];
     }
-    return { ...c, ports };
+    const k = `${c.serverId}::${c.name}`;
+    return { ...c, ports, cpuSeries: cpuBy.get(k) ?? [], memSeries: memBy.get(k) ?? [] };
   });
 }
 
@@ -156,15 +174,29 @@ function Group({
               </Td>
               <Td><StatusBadge status={c.status} /></Td>
               <Td className="tabular-nums">
-                {c.cpuPercent != null
-                  ? `${c.cpuPercent.toFixed(1)}%`
-                  : <span className="text-muted-foreground">—</span>}
+                <div className="flex items-center gap-2">
+                  <span>
+                    {c.cpuPercent != null
+                      ? `${c.cpuPercent.toFixed(1)}%`
+                      : <span className="text-muted-foreground">—</span>}
+                  </span>
+                  {c.cpuSeries.length >= 2 ? (
+                    <Sparkline values={c.cpuSeries} width={56} height={16} tone="primary" />
+                  ) : null}
+                </div>
               </Td>
               <Td className="tabular-nums">
-                {c.memoryBytes != null
-                  ? formatBytes(c.memoryBytes) +
-                    (c.memoryLimitBytes ? ` / ${formatBytes(c.memoryLimitBytes)}` : "")
-                  : <span className="text-muted-foreground">—</span>}
+                <div className="flex items-center gap-2">
+                  <span>
+                    {c.memoryBytes != null
+                      ? formatBytes(c.memoryBytes) +
+                        (c.memoryLimitBytes ? ` / ${formatBytes(c.memoryLimitBytes)}` : "")
+                      : <span className="text-muted-foreground">—</span>}
+                  </span>
+                  {c.memSeries.length >= 2 ? (
+                    <Sparkline values={c.memSeries} width={56} height={16} tone="primary" />
+                  ) : null}
+                </div>
               </Td>
               <Td>
                 {c.ports.length === 0 ? (

@@ -50,6 +50,7 @@ export async function POST(request: Request) {
     prisma.upsSample.deleteMany({ where: { at: { lt: cutoff } } }),
     prisma.networkDeviceSample.deleteMany({ where: { at: { lt: cutoff } } }),
     prisma.logEntry.deleteMany({ where: { at: { lt: cutoff } } }),
+    prisma.containerSample.deleteMany({ where: { at: { lt: cutoff } } }),
     prisma.capacitySample.deleteMany({ where: { hourStart: { lt: capacityCutoff } } }),
     prisma.alert.deleteMany({
       where: { resolved: true, createdAt: { lt: cutoff } },

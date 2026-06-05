@@ -11,6 +11,12 @@ const execFileAsync = promisify(execFile);
 // firing on a single transient failure.
 const ALERT_AFTER_CONSECUTIVE = 2;
 
+// When this many checks newly go DOWN in the same run, it's almost certainly a
+// shared cause (host/network/upstream), so we send ONE grouped notification
+// instead of a flood of individual pages. The individual alert rows are still
+// recorded; only the push is grouped.
+const GROUP_DOWN_THRESHOLD = 3;
+
 // Cert-expiry thresholds (days). Warn three weeks out, escalate to critical
 // inside a week — enough lead time to renew a Let's Encrypt / internal CA cert.
 const CERT_WARN_DAYS = 21;
@@ -177,6 +183,8 @@ export async function runDueChecks(): Promise<{ ran: number; flipped: number }> 
 
   let ran = 0;
   let flipped = 0;
+  // New down-flips this run, collected so we can group them if many fail at once.
+  const downFlips: Array<{ name: string; error: string; createdAt: Date }> = [];
 
   for (const c of candidates) {
     if (c.lastCheckedAt) {
@@ -239,13 +247,8 @@ export async function runDueChecks(): Promise<{ ran: number; flipped: number }> 
           message: `Service ${c.name} is DOWN (${result.error})`,
         },
       });
-      void notifyAlert({
-        type: created.type,
-        severity: created.severity,
-        message: created.message,
-        serverName: c.name,
-        createdAt: created.createdAt,
-      });
+      // Defer the push — if several go down together we group them below.
+      downFlips.push({ name: c.name, error: result.error ?? "down", createdAt: created.createdAt });
     } else if (result.ok && prevStatus === "down") {
       flipped++;
       await prisma.alert.updateMany({
@@ -290,6 +293,30 @@ export async function runDueChecks(): Promise<{ ran: number; flipped: number }> 
         });
         if (r.count > 0) flipped++;
       }
+    }
+  }
+
+  // Push the down-flips. Many at once → one grouped notification (likely a
+  // shared root cause); a few → individual pages as before.
+  if (downFlips.length >= GROUP_DOWN_THRESHOLD) {
+    void notifyAlert({
+      type: "healthcheck:grouped",
+      severity: "critical",
+      message: `${downFlips.length} services went DOWN together (likely an upstream/network/host issue): ${downFlips
+        .map((d) => d.name)
+        .join(", ")}`,
+      serverName: null,
+      createdAt: downFlips[0].createdAt,
+    });
+  } else {
+    for (const d of downFlips) {
+      void notifyAlert({
+        type: "healthcheck:down",
+        severity: "critical",
+        message: `Service ${d.name} is DOWN (${d.error})`,
+        serverName: d.name,
+        createdAt: d.createdAt,
+      });
     }
   }
 

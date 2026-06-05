@@ -14,7 +14,7 @@ import { getDisks } from "./disks.js";
 import { getSensors } from "./sensors.js";
 import {
   getBootAt,
-  getBackupAgeHours,
+  getBackupInfo,
   getFailedUnits,
   getLoadAvg,
   getProcessCount,
@@ -68,7 +68,7 @@ async function tick() {
     getDiskIoRates(), //      11
     getTopProcesses(), //     12
     getSmartDevices(), //     13
-    getBackupAgeHours(), //   14
+    getBackupInfo(), //       14
     getUps(), //              15
     getPowerWatts(), //       16
   ]);
@@ -93,7 +93,8 @@ async function tick() {
     diskIoRates: nonEmpty(val(11, [])),
     topProcesses: nonEmpty(val(12, [])),
     smartDevices: nonEmpty(val(13, [])),
-    backupAgeHours: val<number | undefined>(14, undefined),
+    backupAgeHours: val<{ ageHours: number; bytes?: number } | undefined>(14, undefined)?.ageHours,
+    backupBytes: val<{ ageHours: number; bytes?: number } | undefined>(14, undefined)?.bytes,
     ups: val<Awaited<ReturnType<typeof getUps>>>(15, undefined),
     powerWatts: val<number | undefined>(16, undefined),
     containers: containers ?? undefined,

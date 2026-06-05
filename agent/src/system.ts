@@ -95,7 +95,7 @@ export async function getFailedUnits(): Promise<number | undefined> {
  * only the host that actually holds backups reports — and thus is the only
  * one that can trip the backup-stale alert. Linux only.
  */
-export async function getBackupAgeHours(): Promise<number | undefined> {
+export async function getBackupInfo(): Promise<{ ageHours: number; bytes?: number } | undefined> {
   if (process.platform !== "linux") return undefined;
   const dir = process.env.AGENT_BACKUP_DIR || "/tank/backups/dump";
   let entries: string[];
@@ -105,17 +105,28 @@ export async function getBackupAgeHours(): Promise<number | undefined> {
     return undefined; // dir missing → this host doesn't hold backups
   }
   let newest = 0;
+  let newestArchiveMtime = 0;
+  let newestArchiveBytes: number | undefined;
   for (const e of entries) {
     if (!e.startsWith("vzdump")) continue; // backup archives + their logs
     try {
       const st = await fs.stat(`${dir}/${e}`);
       if (st.mtimeMs > newest) newest = st.mtimeMs;
+      // Size from the newest actual ARCHIVE (skip .log / .notes) so a
+      // truncated / half-failed dump shows up as a sudden size drop.
+      if (!/\.(log|notes)$/i.test(e) && st.mtimeMs > newestArchiveMtime) {
+        newestArchiveMtime = st.mtimeMs;
+        newestArchiveBytes = st.size;
+      }
     } catch {
       /* file vanished between readdir and stat */
     }
   }
   if (newest === 0) return undefined; // no backups found
-  return Math.round(((Date.now() - newest) / 3_600_000) * 10) / 10;
+  return {
+    ageHours: Math.round(((Date.now() - newest) / 3_600_000) * 10) / 10,
+    bytes: newestArchiveBytes,
+  };
 }
 
 function round(n: number): number {
