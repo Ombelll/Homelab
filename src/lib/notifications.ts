@@ -136,6 +136,13 @@ export async function notifyAlert(alert: AlertNotification): Promise<void> {
       const alertRank = SEVERITY_RANK[alert.severity] ?? 0;
       if (alertRank < minRank) return;
 
+      // Type routing: if the channel restricts alert types, only send matching
+      // ones. Prefix match, so "healthcheck" covers "healthcheck:tcp" etc.
+      if (c.alertTypes && c.alertTypes.trim()) {
+        const patterns = c.alertTypes.split(",").map((s) => s.trim()).filter(Boolean);
+        if (!patterns.some((p) => alert.type === p || alert.type.startsWith(p))) return;
+      }
+
       try {
         const config = JSON.parse(c.config || "{}");
         await sendToChannel(c.type as ChannelType, config, alert);

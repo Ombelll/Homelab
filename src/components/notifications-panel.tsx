@@ -12,6 +12,7 @@ type Channel = {
   type: ChannelType;
   enabled: boolean;
   minSeverity: "info" | "warning" | "critical";
+  alertTypes: string | null;
   config: Record<string, unknown>;
   lastUsedAt: string | null;
   lastError: string | null;
@@ -133,6 +134,14 @@ export function NotificationsPanel() {
                       {c.type}
                     </span>
                     <span className="text-xs text-muted-foreground">≥ {c.minSeverity}</span>
+                    {c.alertTypes ? (
+                      <span
+                        title={`Only alert types matching: ${c.alertTypes}`}
+                        className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary"
+                      >
+                        types: {c.alertTypes}
+                      </span>
+                    ) : null}
                     {!c.enabled ? <span className="text-xs text-warning">disabled</span> : null}
                   </div>
                   <div className="mt-1 truncate text-xs text-muted-foreground">
@@ -198,6 +207,7 @@ function NewChannelForm({ onCreated }: { onCreated: () => void }) {
   const [name, setName] = useState("");
   const [type, setType] = useState<ChannelType>("discord");
   const [minSeverity, setMinSeverity] = useState<"info" | "warning" | "critical">("warning");
+  const [alertTypes, setAlertTypes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -242,7 +252,7 @@ function NewChannelForm({ onCreated }: { onCreated: () => void }) {
       const res = await fetch("/api/notification-channels", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, type, minSeverity, config }),
+        body: JSON.stringify({ name, type, minSeverity, alertTypes: alertTypes.trim() || undefined, config }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -295,6 +305,15 @@ function NewChannelForm({ onCreated }: { onCreated: () => void }) {
           </select>
         </Field>
       </div>
+
+      <Field label="Alert types (optional — comma-separated, prefix match; empty = all)">
+        <input
+          className={inputClass}
+          value={alertTypes}
+          onChange={(e) => setAlertTypes(e.target.value)}
+          placeholder="e.g. ups-on-battery, smart, backup, memory-leak"
+        />
+      </Field>
 
       {type === "discord" ? (
         <Field label="Webhook URL">

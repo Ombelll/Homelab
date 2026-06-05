@@ -17,7 +17,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
   await prisma.alert.update({
     where: { id: alert.id },
-    data: { resolved: true },
+    data: { resolved: true, resolvedAt: new Date() },
   });
   void recordAudit({
     user: guard.user,

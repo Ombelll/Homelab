@@ -141,7 +141,7 @@ export async function POST(request: Request) {
       await prisma.alert.update({ where: { id: open.id }, data: { message } });
     }
   } else if (open) {
-    await prisma.alert.update({ where: { id: open.id }, data: { resolved: true } });
+    await prisma.alert.update({ where: { id: open.id }, data: { resolved: true, resolvedAt: new Date() } });
   }
 
   return NextResponse.json({ ok: true, ports: d.ports.length });

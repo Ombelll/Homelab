@@ -16,6 +16,7 @@ const createSchema = z.object({
   type: z.enum(CHANNEL_TYPES),
   enabled: z.boolean().default(true),
   minSeverity: z.enum(["info", "warning", "critical"]).default("warning"),
+  alertTypes: z.string().max(512).optional(),
   config: z.unknown(),
 });
 
@@ -33,6 +34,7 @@ export async function GET() {
       type: c.type,
       enabled: c.enabled,
       minSeverity: c.minSeverity,
+      alertTypes: c.alertTypes,
       config: redactConfig(c.type as ChannelType, safeParse(c.config)),
       lastUsedAt: c.lastUsedAt,
       lastError: c.lastError,
@@ -70,6 +72,7 @@ export async function POST(request: Request) {
       type: parsed.data.type,
       enabled: parsed.data.enabled,
       minSeverity: parsed.data.minSeverity,
+      alertTypes: parsed.data.alertTypes?.trim() || null,
       config: JSON.stringify(configCheck.value),
     },
   });

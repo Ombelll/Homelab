@@ -10,6 +10,7 @@ const patchSchema = z.object({
   name: z.string().min(1).max(64).optional(),
   enabled: z.boolean().optional(),
   minSeverity: z.enum(["info", "warning", "critical"]).optional(),
+  alertTypes: z.string().max(512).nullable().optional(),
   config: z.unknown().optional(),
 });
 
@@ -38,6 +39,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   if (parsed.data.name !== undefined) data.name = parsed.data.name;
   if (parsed.data.enabled !== undefined) data.enabled = parsed.data.enabled;
   if (parsed.data.minSeverity !== undefined) data.minSeverity = parsed.data.minSeverity;
+  if (parsed.data.alertTypes !== undefined) data.alertTypes = parsed.data.alertTypes?.trim() || null;
   if (parsed.data.config !== undefined) {
     const check = validateChannelConfig(existing.type as ChannelType, parsed.data.config);
     if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });

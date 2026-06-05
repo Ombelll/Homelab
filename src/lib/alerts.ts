@@ -108,7 +108,7 @@ async function reconcile(input: {
   // Recovery: a single below-warning sample resolves the alert.
   if (input.currentValue < warning) {
     if (open) {
-      await prisma.alert.update({ where: { id: open.id }, data: { resolved: true } });
+      await prisma.alert.update({ where: { id: open.id }, data: { resolved: true, resolvedAt: new Date() } });
     }
     return;
   }
@@ -546,7 +546,7 @@ async function reconcileState(input: {
 
   if (!input.breaching) {
     if (open) {
-      await prisma.alert.update({ where: { id: open.id }, data: { resolved: true } });
+      await prisma.alert.update({ where: { id: open.id }, data: { resolved: true, resolvedAt: new Date() } });
     }
     return;
   }

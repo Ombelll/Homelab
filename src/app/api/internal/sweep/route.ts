@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     } else if (!stale && existing) {
       await prisma.alert.update({
         where: { id: existing.id },
-        data: { resolved: true },
+        data: { resolved: true, resolvedAt: new Date() },
       });
       cleared++;
     }

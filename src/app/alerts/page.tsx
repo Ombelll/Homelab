@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { BarChart3 } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
 import { AlertsTable } from "@/components/alerts-table";
@@ -27,6 +29,14 @@ export default async function AlertsPage() {
       <PageHeader
         title="Alerts"
         description="Open + recent alerts. Ack to mute upgrade-notifications, snooze to silence for an hour, resolve to close manually."
+        actions={
+          <Link
+            href="/alerts/analytics"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-sm hover:bg-accent"
+          >
+            <BarChart3 className="h-3.5 w-3.5" /> Analytics
+          </Link>
+        }
       />
       <AlertsTable alerts={alerts} />
     </>

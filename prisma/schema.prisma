@@ -455,6 +455,9 @@ model Alert {
   message   String
   resolved  Boolean  @default(false)
   createdAt DateTime @default(now())
+  // When the alert was resolved (auto or manual). Drives time-to-resolve
+  // (MTTR) on the alert-analytics page. NULL while still open.
+  resolvedAt DateTime?
 
   // Acknowledgment: clicking "ack" stops future severity-upgrade
   // notifications on this alert. Does not resolve the alert.
@@ -546,6 +549,11 @@ model NotificationChannel {
   enabled       Boolean   @default(true)
   // What severity levels trigger this channel: subset of "info,warning,critical".
   minSeverity   String    @default("warning")
+  // Optional comma-separated alert-type prefixes this channel handles (e.g.
+  // "ups-on-battery,smart,backup"). Empty/NULL = all types. A match is a
+  // prefix match, so "healthcheck" catches "healthcheck:tcp" etc. Lets you
+  // route e.g. critical hardware alerts to your phone and the rest to chat.
+  alertTypes    String?
   lastUsedAt    DateTime?
   lastError     String?
   createdAt     DateTime  @default(now())

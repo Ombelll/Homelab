@@ -257,7 +257,7 @@ export async function runDueChecks(): Promise<{ ran: number; flipped: number }> 
           type: { startsWith: "healthcheck:" },
           message: { contains: c.name },
         },
-        data: { resolved: true },
+        data: { resolved: true, resolvedAt: new Date() },
       });
     }
 
@@ -339,7 +339,7 @@ async function reconcileCertExpiry(name: string, expiresAt: Date): Promise<numbe
 
   if (!breaching) {
     if (open) {
-      await prisma.alert.update({ where: { id: open.id }, data: { resolved: true } });
+      await prisma.alert.update({ where: { id: open.id }, data: { resolved: true, resolvedAt: new Date() } });
       return 1;
     }
     return 0;
