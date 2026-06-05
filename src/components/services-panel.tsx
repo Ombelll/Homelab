@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Play, Plus, Trash2 } from "lucide-react";
 import { formatRelativeTime, cn } from "@/lib/utils";
+import { Sparkline } from "@/components/sparkline";
 
 type Check = {
   id: string;
@@ -19,7 +20,9 @@ type Check = {
   lastCheckedAt: string | null;
   lastError: string | null;
   certExpiresAt: string | null;
+  latencyWarnMs: number | null;
   uptime24: number | null;
+  latency: number[];
 };
 
 export function ServicesPanel({
@@ -165,7 +168,21 @@ export function ServicesPanel({
                       )}
                     </Td>
                     <Td className="text-muted-foreground">
-                      {c.lastLatencyMs != null ? `${c.lastLatencyMs} ms` : "—"}
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "tabular-nums",
+                            c.latencyWarnMs != null && c.lastLatencyMs != null && c.lastLatencyMs > c.latencyWarnMs
+                              ? "text-amber-500"
+                              : undefined,
+                          )}
+                        >
+                          {c.lastLatencyMs != null ? `${c.lastLatencyMs} ms` : "—"}
+                        </span>
+                        {c.latency.length >= 2 ? (
+                          <Sparkline values={c.latency} width={64} height={18} tone="primary" />
+                        ) : null}
+                      </div>
                     </Td>
                     <Td className="text-muted-foreground">{formatRelativeTime(c.lastCheckedAt)}</Td>
                     <Td className="text-right">

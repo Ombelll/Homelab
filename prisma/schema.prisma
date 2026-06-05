@@ -127,6 +127,10 @@ model SmartDevice {
   mediaErrors          Int?
   criticalWarning      Int?
   availableSparePercent Int?
+  // Result of the most recent SMART self-test (`smartctl -l selftest`), e.g.
+  // "Completed without error" / "in progress" / a failure string. The agent
+  // also kicks off a long self-test on a weekly cadence. NULL = none seen.
+  selfTestStatus       String?
   updatedAt         DateTime @updatedAt
 
   server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
@@ -393,6 +397,11 @@ model HealthCheck {
   lastCheckedAt   DateTime?
   lastError       String?
   consecutiveDown Int       @default(0)
+  // Optional latency SLO (ms): when set and a probe is up but slower than this
+  // for several runs in a row, raise a warning (a service degrading before it
+  // outright fails). NULL = no latency alerting for this check.
+  latencyWarnMs   Int?
+  consecutiveSlow Int       @default(0)
   // For type "tls": the peer certificate's notAfter. Used to alert ahead of
   // expiry. NULL for non-tls checks or when never probed.
   certExpiresAt   DateTime?

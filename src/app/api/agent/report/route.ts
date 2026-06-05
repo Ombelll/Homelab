@@ -231,6 +231,7 @@ export async function POST(request: Request) {
         mediaErrors: x.mediaErrors ?? null,
         criticalWarning: x.criticalWarning ?? null,
         availableSparePercent: x.availableSparePercent ?? null,
+        selfTestStatus: x.selfTestStatus ?? null,
       };
       ops.push(
         prisma.smartDevice.upsert({

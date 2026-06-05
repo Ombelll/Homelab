@@ -14,6 +14,7 @@ const createSchema = z.object({
   intervalSeconds: z.coerce.number().int().min(10).max(86400).default(60),
   timeoutMs: z.coerce.number().int().min(100).max(60000).default(5000),
   expectedStatus: z.coerce.number().int().min(100).max(599).nullable().optional(),
+  latencyWarnMs: z.coerce.number().int().min(1).max(60000).nullable().optional(),
   enabled: z.boolean().default(true),
 });
 
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
       intervalSeconds: parsed.data.intervalSeconds,
       timeoutMs: parsed.data.timeoutMs,
       expectedStatus: parsed.data.expectedStatus ?? null,
+      latencyWarnMs: parsed.data.latencyWarnMs ?? null,
       enabled: parsed.data.enabled,
     },
   });

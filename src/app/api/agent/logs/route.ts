@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { unauthorized, verifyAgentKey } from "@/lib/auth";
 import { logsReportSchema } from "@/lib/validation";
+import { scanLogLines } from "@/lib/log-patterns";
+import { notifyAlert } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +43,33 @@ export async function POST(request: Request) {
       ...(l.at ? { at: new Date(l.at) } : {}),
     })),
   });
+
+  // Critical-pattern alerting: scan the batch for high-signal lines (OOM, I/O
+  // errors, ZFS/FS corruption, crashes, thermal). One open alert per
+  // server+pattern — we only create + notify when there isn't already an
+  // unresolved one, so a recurring line doesn't spam.
+  for (const match of scanLogLines(d.lines)) {
+    const type = `log:${match.pattern.key}`;
+    const open = await prisma.alert.findFirst({
+      where: { serverId: server.id, type, resolved: false },
+    });
+    if (open) continue;
+    const created = await prisma.alert.create({
+      data: {
+        serverId: server.id,
+        type,
+        severity: match.pattern.severity,
+        message: `${match.pattern.label} on ${server.name}: ${match.sample.slice(0, 200)}`,
+      },
+    });
+    void notifyAlert({
+      type: created.type,
+      severity: created.severity,
+      message: created.message,
+      serverName: server.name,
+      createdAt: created.createdAt,
+    });
+  }
 
   return NextResponse.json({ ok: true, stored: d.lines.length });
 }

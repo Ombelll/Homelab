@@ -15,6 +15,7 @@ export type SmartDevice = {
   mediaErrors?: number;
   criticalWarning?: number;
   availableSparePercent?: number;
+  selfTestStatus?: string;
 };
 
 type ScanJson = { devices?: Array<{ name?: string }> };
@@ -33,7 +34,19 @@ type SmartJson = {
     available_spare?: number;
   };
   ata_smart_attributes?: { table?: Array<{ id?: number; raw?: { value?: number } }> };
+  // Self-test log (ATA + NVMe shapes differ). Newest entry is first.
+  ata_smart_self_test_log?: {
+    standard?: { table?: Array<{ status?: { string?: string; passed?: boolean }; lifetime_hours?: number }> };
+  };
+  nvme_self_test_log?: {
+    current_self_test_operation?: { value?: number };
+    table?: Array<{ self_test_result?: { string?: string }; power_on_hours?: number }>;
+  };
 };
+
+// Trigger a fresh long self-test when the newest one is older than this many
+// power-on hours (≈ weekly), so a degrading surface is caught proactively.
+const SELFTEST_INTERVAL_HOURS = 168;
 
 // SMART data changes slowly and `smartctl` is comparatively heavy, so we
 // refresh at most every REFRESH_MS and serve the cached result on the ticks
@@ -79,7 +92,7 @@ export async function getSmartDevices(): Promise<SmartDevice[]> {
 }
 
 async function readDevice(name: string): Promise<SmartDevice | null> {
-  const stdout = await smartctl(["-H", "-A", "-i", "-j", name]);
+  const stdout = await smartctl(["-H", "-A", "-i", "-l", "selftest", "-j", name]);
   if (!stdout) return null;
 
   let j: SmartJson;
@@ -109,7 +122,39 @@ async function readDevice(name: string): Promise<SmartDevice | null> {
   const realloc = j.ata_smart_attributes?.table?.find((a) => a.id === 5);
   if (typeof realloc?.raw?.value === "number") dev.reallocatedSectors = realloc.raw.value;
 
+  // Self-test status + proactive weekly long test.
+  const st = readSelfTest(j);
+  if (st.status) dev.selfTestStatus = st.status;
+  const poh = dev.powerOnHours;
+  const dueForTest =
+    !st.inProgress &&
+    poh != null &&
+    (st.lastHours == null || poh - st.lastHours >= SELFTEST_INTERVAL_HOURS);
+  if (dueForTest) {
+    // Fire-and-forget: `-t long` only SCHEDULES the test and returns at once;
+    // the drive runs it in the background and we read the result on later ticks.
+    void smartctl(["-t", "long", name]);
+  }
+
   return dev;
+}
+
+function readSelfTest(j: SmartJson): { status?: string; inProgress: boolean; lastHours?: number } {
+  // NVMe
+  if (j.nvme_self_test_log) {
+    const inProgress = (j.nvme_self_test_log.current_self_test_operation?.value ?? 0) !== 0;
+    const newest = j.nvme_self_test_log.table?.[0];
+    return {
+      status: inProgress ? "in progress" : newest?.self_test_result?.string,
+      inProgress,
+      lastHours: newest?.power_on_hours,
+    };
+  }
+  // ATA/SATA
+  const table = j.ata_smart_self_test_log?.standard?.table;
+  const newest = table?.[0];
+  const inProgress = /in progress|remaining/i.test(newest?.status?.string ?? "");
+  return { status: newest?.status?.string, inProgress, lastHours: newest?.lifetime_hours };
 }
 
 /**

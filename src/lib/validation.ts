@@ -125,6 +125,7 @@ export const smartDeviceSchema = z.object({
   mediaErrors: z.number().int().min(0).optional(),
   criticalWarning: z.number().int().min(0).optional(),
   availableSparePercent: z.number().int().min(0).max(100).optional(),
+  selfTestStatus: z.string().max(128).optional(),
 });
 
 export const upsSchema = z.object({

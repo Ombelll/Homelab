@@ -195,6 +195,11 @@ export async function runDueChecks(): Promise<{ ran: number; flipped: number }> 
     const nextStatus = result.ok ? "up" : "down";
     const consecutiveDown = result.ok ? 0 : c.consecutiveDown + 1;
 
+    // Latency SLO: "up but slow". Only when the check has a threshold set.
+    const isSlow =
+      result.ok && c.latencyWarnMs != null && result.latencyMs != null && result.latencyMs > c.latencyWarnMs;
+    const consecutiveSlow = isSlow ? c.consecutiveSlow + 1 : 0;
+
     const certExpiresAt = result.ok && result.certExpiresAt ? result.certExpiresAt : undefined;
 
     // History row behind uptime % + the latency graph (pruned by retention).
@@ -210,6 +215,7 @@ export async function runDueChecks(): Promise<{ ran: number; flipped: number }> 
         lastLatencyMs: result.latencyMs ?? null,
         lastError: result.ok ? null : result.error,
         consecutiveDown,
+        consecutiveSlow,
         // Only overwrite when we actually read a fresh expiry (tls probe that
         // succeeded); a failed probe keeps the last known value.
         ...(certExpiresAt ? { certExpiresAt } : {}),
@@ -250,6 +256,40 @@ export async function runDueChecks(): Promise<{ ran: number; flipped: number }> 
         },
         data: { resolved: true },
       });
+    }
+
+    // Latency-SLO alert: open after N consecutive slow probes, resolve when the
+    // service speeds back up. Only queries the alert table at a transition.
+    if (c.latencyWarnMs != null) {
+      if (isSlow && consecutiveSlow === ALERT_AFTER_CONSECUTIVE) {
+        const open = await prisma.alert.findFirst({
+          where: { resolved: false, type: "healthcheck-latency", message: { contains: c.name } },
+        });
+        if (!open) {
+          flipped++;
+          const created = await prisma.alert.create({
+            data: {
+              serverId: null,
+              type: "healthcheck-latency",
+              severity: "warning",
+              message: `Service ${c.name} is SLOW (${result.latencyMs}ms > ${c.latencyWarnMs}ms threshold)`,
+            },
+          });
+          void notifyAlert({
+            type: created.type,
+            severity: created.severity,
+            message: created.message,
+            serverName: c.name,
+            createdAt: created.createdAt,
+          });
+        }
+      } else if (!isSlow && c.consecutiveSlow >= ALERT_AFTER_CONSECUTIVE) {
+        const r = await prisma.alert.updateMany({
+          where: { resolved: false, type: "healthcheck-latency", message: { contains: c.name } },
+          data: { resolved: true },
+        });
+        if (r.count > 0) flipped++;
+      }
     }
   }
 

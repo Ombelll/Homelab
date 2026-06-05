@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 
 export default async function ServicesPage() {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const [user, checks, totals, oks] = await Promise.all([
+  const sinceLatency = new Date(Date.now() - 6 * 60 * 60 * 1000);
+  const [user, checks, totals, oks, latencyRows] = await Promise.all([
     getCurrentUser(),
     prisma.healthCheck.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.healthCheckResult.groupBy({ by: ["checkId"], where: { at: { gte: since } }, _count: { _all: true } }),
@@ -16,7 +17,20 @@ export default async function ServicesPage() {
       where: { at: { gte: since }, ok: true },
       _count: { _all: true },
     }),
+    prisma.healthCheckResult.findMany({
+      where: { at: { gte: sinceLatency }, latencyMs: { not: null } },
+      select: { checkId: true, latencyMs: true },
+      orderBy: { at: "asc" },
+    }),
   ]);
+  // Bucket latency points per check (last 6h) for the sparkline.
+  const latencyBy = new Map<string, number[]>();
+  for (const r of latencyRows) {
+    if (r.latencyMs == null) continue;
+    const arr = latencyBy.get(r.checkId) ?? [];
+    arr.push(r.latencyMs);
+    latencyBy.set(r.checkId, arr);
+  }
   const totalBy = new Map(totals.map((t) => [t.checkId, t._count._all]));
   const okBy = new Map(oks.map((t) => [t.checkId, t._count._all]));
   const uptime24 = (id: string): number | null => {
@@ -46,7 +60,9 @@ export default async function ServicesPage() {
           lastCheckedAt: c.lastCheckedAt?.toISOString() ?? null,
           lastError: c.lastError,
           certExpiresAt: c.certExpiresAt?.toISOString() ?? null,
+          latencyWarnMs: c.latencyWarnMs,
           uptime24: uptime24(c.id),
+          latency: latencyBy.get(c.id) ?? [],
         }))}
         canEdit={canEdit}
       />

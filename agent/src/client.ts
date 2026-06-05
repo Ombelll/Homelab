@@ -80,6 +80,7 @@ export const api = {
       mediaErrors?: number;
       criticalWarning?: number;
       availableSparePercent?: number;
+      selfTestStatus?: string;
     }>;
     ups?: {
       name: string;

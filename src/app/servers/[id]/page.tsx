@@ -477,6 +477,18 @@ export default async function ServerDetailPage({ params }: { params: { id: strin
                   {dv.powerOnHours != null ? (
                     <span title="Power-on hours">{dv.powerOnHours.toLocaleString()} h</span>
                   ) : null}
+                  {dv.selfTestStatus ? (
+                    <span
+                      className={
+                        /without error|in progress|never/i.test(dv.selfTestStatus)
+                          ? undefined
+                          : "text-destructive"
+                      }
+                      title="Most recent SMART self-test result"
+                    >
+                      test: {dv.selfTestStatus.replace(/^Completed:?\s*/i, "").slice(0, 24)}
+                    </span>
+                  ) : null}
                 </div>
               </li>
             ))}

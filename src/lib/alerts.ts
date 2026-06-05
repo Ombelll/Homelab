@@ -224,6 +224,13 @@ const WEAR_CRIT = 95;
 // threshold, critical when nearly exhausted.
 const SPARE_WARN = 10;
 const SPARE_CRIT = 5;
+// A SMART self-test result that indicates a failure (read errors, damage),
+// excluding the healthy "completed without error" and in-progress states.
+function selfTestFailed(status: string | null | undefined): boolean {
+  if (!status) return false;
+  if (/without error|in progress|never started/i.test(status)) return false;
+  return /fail|error|damage|unknown failure/i.test(status);
+}
 // Capacity fill-up forecast: warn when a disk/pool is projected to hit 100%
 // within this many days at its current growth rate; critical when very soon.
 const FORECAST_WARN_DAYS = 30;
@@ -278,7 +285,8 @@ export async function evaluateStateAlerts(input: {
         (dv.wearPercent ?? 0) >= WEAR_WARN ||
         (dv.mediaErrors ?? 0) > 0 ||
         (dv.criticalWarning ?? 0) > 0 ||
-        (dv.availableSparePercent != null && dv.availableSparePercent <= SPARE_WARN)),
+        (dv.availableSparePercent != null && dv.availableSparePercent <= SPARE_WARN) ||
+        selfTestFailed(dv.selfTestStatus)),
   );
 
   // Capacity forecast: disks/pools projected to fill within the warn horizon,
@@ -420,7 +428,8 @@ export async function evaluateStateAlerts(input: {
           (dv.wearPercent ?? 0) >= WEAR_CRIT ||
           (dv.mediaErrors ?? 0) > 0 ||
           (dv.criticalWarning ?? 0) > 0 ||
-          (dv.availableSparePercent != null && dv.availableSparePercent <= SPARE_CRIT),
+          (dv.availableSparePercent != null && dv.availableSparePercent <= SPARE_CRIT) ||
+          selfTestFailed(dv.selfTestStatus),
       )
         ? "critical"
         : "warning",
@@ -433,6 +442,7 @@ export async function evaluateStateAlerts(input: {
           if ((dv.criticalWarning ?? 0) > 0) bits.push(`critical warning 0x${(dv.criticalWarning ?? 0).toString(16)}`);
           if (dv.availableSparePercent != null && dv.availableSparePercent <= SPARE_WARN)
             bits.push(`${dv.availableSparePercent}% spare`);
+          if (selfTestFailed(dv.selfTestStatus)) bits.push(`self-test: ${dv.selfTestStatus}`);
           return `${dv.device} (${bits.join(", ")})`;
         })
         .join(", ")}`,

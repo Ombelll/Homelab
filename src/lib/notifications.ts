@@ -158,6 +158,42 @@ export async function notifyAlert(alert: AlertNotification): Promise<void> {
   );
 }
 
+/**
+ * "Who watches the watcher" — send a low-priority test notification to every
+ * enabled channel and report how many actually delivered. A scheduled caller
+ * pings a healthchecks.io dead-man's switch ONLY when at least one delivered;
+ * if the whole alerting path is silently broken, that ping is skipped and the
+ * dead-man fires through a *different* channel (email). Bypasses minSeverity /
+ * quiet-hours on purpose — it's testing the pipe, not raising an alert.
+ */
+export async function sendHeartbeat(): Promise<{ sent: number; failed: number; total: number }> {
+  const channels = await prisma.notificationChannel.findMany({ where: { enabled: true } });
+  const alert: AlertNotification = {
+    type: "heartbeat",
+    severity: "info",
+    message: "✅ Alerting-path heartbeat — notifications are working (weekly self-test).",
+    serverName: "monitoring",
+    createdAt: new Date(),
+  };
+  let sent = 0;
+  let failed = 0;
+  for (const c of channels) {
+    try {
+      await sendToChannel(c.type as ChannelType, JSON.parse(c.config || "{}"), alert);
+      sent++;
+      await prisma.notificationChannel
+        .update({ where: { id: c.id }, data: { lastUsedAt: new Date(), lastError: null } })
+        .catch(() => {});
+    } catch (err) {
+      failed++;
+      await prisma.notificationChannel
+        .update({ where: { id: c.id }, data: { lastError: (err as Error).message?.slice(0, 500) ?? "unknown" } })
+        .catch(() => {});
+    }
+  }
+  return { sent, failed, total: channels.length };
+}
+
 export async function sendToChannel(
   type: ChannelType,
   rawConfig: unknown,
