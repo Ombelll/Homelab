@@ -17,16 +17,13 @@ services:
     security_opt:
       - no-new-privileges:true
 
-    # --- Intel QuickSync hardware transcoding (optional; remove if no /dev/dri) ---
-    devices:
-      - /dev/dri:/dev/dri
-    group_add:
-      # Must match the HOST's "render" group GID so the container can use the
-      # iGPU. Find it with `getent group render` on the host (often 104/993) and
-      # put the NUMBER here. "video" (44) is usually fine by name.
-      - "video"
-      - "render"
-    # ---------------------------------------------------------------------------
+    # CPU transcoding by default — works everywhere, no setup. To enable Intel
+    # QuickSync (iGPU) later, pass /dev/dri into CT 101 (see fase-6-services.md)
+    # and add back:
+    #   devices: ["/dev/dri:/dev/dri"]
+    #   group_add: ["<host render GID from `getent group render`>"]
+    # Note: the iGPU in an unprivileged LXC + Docker needs care — do it as a
+    # deliberate follow-up, not blind.
 
     volumes:
       - jellyfin-config:/config
