@@ -8,6 +8,10 @@
 # (PC/laptop) update themselves via the dashboard's agent.update job.
 set -eu
 
+# cron.d jobs get a minimal PATH that lacks /usr/sbin (where pct lives); make
+# this robust whether run from an interactive shell or cron.
+export PATH="/usr/sbin:/usr/local/sbin:/usr/bin:/usr/local/bin:/sbin:/bin:${PATH:-}"
+
 DASH_CT="${DASH_CT:-101}"
 DASH_DIR="${DASH_DIR:-/opt/Homelab}"
 AGENT="${AGENT:-/opt/homelab-agent/deploy/install-agent.sh}"
