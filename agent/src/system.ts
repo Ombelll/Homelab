@@ -105,27 +105,33 @@ export async function getBackupInfo(): Promise<{ ageHours: number; bytes?: numbe
     return undefined; // dir missing → this host doesn't hold backups
   }
   let newest = 0;
-  let newestArchiveMtime = 0;
-  let newestArchiveBytes: number | undefined;
+  // vzdump writes one archive PER guest into the same dir, so "the newest
+  // archive" alternates between a small CT and a big one — naively tracking it
+  // produced false "backup shrank" alerts. Instead track the newest archive
+  // PER guest and report the SUM, which is stable run-to-run and only drops if
+  // a guest's backup actually truncates/fails.
+  const perGuest = new Map<string, { mtime: number; size: number }>();
   for (const e of entries) {
     if (!e.startsWith("vzdump")) continue; // backup archives + their logs
     try {
       const st = await fs.stat(`${dir}/${e}`);
       if (st.mtimeMs > newest) newest = st.mtimeMs;
-      // Size from the newest actual ARCHIVE (skip .log / .notes) so a
-      // truncated / half-failed dump shows up as a sudden size drop.
-      if (!/\.(log|notes)$/i.test(e) && st.mtimeMs > newestArchiveMtime) {
-        newestArchiveMtime = st.mtimeMs;
-        newestArchiveBytes = st.size;
-      }
+      if (/\.(log|notes)$/i.test(e)) continue; // archives only for the size sum
+      // e.g. vzdump-lxc-100-2026_06_05-03_00_02.tar.zst / vzdump-qemu-201-...
+      const m = /^vzdump-(?:lxc|qemu)-(\d+)-/.exec(e);
+      const guest = m ? m[1] : e; // fall back to the filename if it doesn't match
+      const cur = perGuest.get(guest);
+      if (!cur || st.mtimeMs > cur.mtime) perGuest.set(guest, { mtime: st.mtimeMs, size: st.size });
     } catch {
       /* file vanished between readdir and stat */
     }
   }
   if (newest === 0) return undefined; // no backups found
+  const bytes =
+    perGuest.size > 0 ? [...perGuest.values()].reduce((a, g) => a + g.size, 0) : undefined;
   return {
     ageHours: Math.round(((Date.now() - newest) / 3_600_000) * 10) / 10,
-    bytes: newestArchiveBytes,
+    bytes,
   };
 }
 
