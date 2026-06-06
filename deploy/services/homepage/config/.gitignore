@@ -1,0 +1,9 @@
+# Homepage auto-creates these skeleton/runtime files in its (writable) config
+# dir on boot. We keep only the yaml we author tracked; ignore the rest.
+kubernetes.yaml
+proxmox.yaml
+custom.css
+custom.js
+custom.scss
+logs/
+.next/
