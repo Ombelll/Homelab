@@ -16,6 +16,14 @@ zfs create tank/nextcloud
 # Bind them into CT 101 (mp1/mp2 — check `pct config 101` for a free mpN).
 pct set 101 -mp1 /tank/media,mp=/mnt/media
 pct set 101 -mp2 /tank/nextcloud,mp=/mnt/nextcloud
+
+# CRITICAL for an unprivileged CT: the bind dirs are root-owned, but containers
+# run under the id-mapped range, so they can't write. Nextcloud's www-data is
+# uid 33 → derive the host uid from any container-root-owned path (immich) and
+# chown the nextcloud data dir to base+33. (Jellyfin reads /media read-only, so
+# /tank/media needs no chown.)
+BASE=$(stat -c %u /tank/immich)        # 0 if privileged, 100000 if unprivileged
+chown -R $((BASE+33)):$((BASE+33)) /tank/nextcloud
 ```
 
 ## 2. Intel iGPU into CT 101 (Jellyfin QuickSync — optional)

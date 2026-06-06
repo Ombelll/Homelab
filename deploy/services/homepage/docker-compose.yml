@@ -17,7 +17,10 @@ services:
       # the LAN name and the tailnet name it's served under.
       HOMEPAGE_ALLOWED_HOSTS: "home.lan,proxmox-01.tailf562d8.ts.net"
     volumes:
+      # Config is read-only from git, but Homepage needs to write its logs dir —
+      # overlay a writable named volume just there so the repo stays clean.
       - /opt/Homelab/deploy/services/homepage/config:/app/config:ro
+      - homepage-logs:/app/config/logs
     networks:
       - proxy
     labels:
@@ -27,6 +30,9 @@ services:
       - "traefik.http.routers.homepage.entrypoints=web"
       - "traefik.http.routers.homepage.middlewares=security-headers@file"
       - "traefik.http.services.homepage.loadbalancer.server.port=3000"
+
+volumes:
+  homepage-logs:
 
 networks:
   proxy:
