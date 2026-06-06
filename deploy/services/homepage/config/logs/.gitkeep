@@ -1,0 +1,2 @@
+# Mountpoint for the writable homepage-logs volume. The config dir is mounted
+# read-only, so this dir must already exist for Docker to mount the volume here.
