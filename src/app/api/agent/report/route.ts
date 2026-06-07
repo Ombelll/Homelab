@@ -60,6 +60,14 @@ export async function POST(request: Request) {
   const tempValues = d.sensors?.filter((s) => s.kind === "temperature").map((s) => s.value) ?? [];
   const maxTempC = tempValues.length ? Math.max(...tempValues) : null;
 
+  // A backup whose newest archive is very fresh (< 1h) is likely still being
+  // written by the nightly vzdump — its size is mid-stream, so a snapshot taken
+  // during the backup window would look "shrunk" against the last settled size.
+  // Only trust the size (as baseline AND for shrink detection) once the archive
+  // has settled. Backups run nightly, so this 1h gate costs no real freshness: a
+  // genuinely truncated dump stays small and trips the alert an hour later.
+  const backupSettled = d.backupAgeHours == null || d.backupAgeHours >= 1;
+
   // One transaction so a tick lands atomically.
   const ops: Prisma.PrismaPromise<unknown>[] = [
     prisma.metric.create({
@@ -87,7 +95,7 @@ export async function POST(request: Request) {
         ...(d.diskIoRates ? { diskIoRates: JSON.stringify(d.diskIoRates) } : {}),
         ...(d.topProcesses ? { topProcesses: JSON.stringify(d.topProcesses) } : {}),
         ...(d.backupAgeHours != null ? { backupAgeHours: d.backupAgeHours } : {}),
-        ...(d.backupBytes != null ? { backupBytes: d.backupBytes } : {}),
+        ...(d.backupBytes != null && backupSettled ? { backupBytes: d.backupBytes } : {}),
         ...(d.powerWatts != null ? { powerWatts: d.powerWatts } : {}),
         ...(d.ups
           ? {
@@ -276,6 +284,7 @@ export async function POST(request: Request) {
   // fetched before the update above). One open alert per server.
   if (
     d.backupBytes != null &&
+    backupSettled &&
     server.backupBytes != null &&
     server.backupBytes > 50 * 1024 * 1024 &&
     d.backupBytes < server.backupBytes * 0.6
