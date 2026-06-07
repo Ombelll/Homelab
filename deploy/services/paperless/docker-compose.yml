@@ -1,0 +1,59 @@
+# Paperless-ngx — scan / OCR / archive your documents, fully searchable.
+# Reached at paperless.lan. Uses SQLite (default, no external DB) + a small
+# bundled Redis broker (mandatory). All state lives in named volumes; add
+# documents by uploading in the UI or dropping files into the consume volume.
+#
+#   docker compose --env-file /opt/Homelab/.env -f deploy/services/paperless/docker-compose.yml up -d
+
+services:
+  paperless-redis:
+    image: docker.io/library/redis:7
+    container_name: paperless-redis
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - paperless-redis:/data
+    networks:
+      - proxy
+
+  paperless:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless
+    restart: unless-stopped
+    depends_on:
+      - paperless-redis
+    environment:
+      PAPERLESS_REDIS: "redis://paperless-redis:6379"
+      PAPERLESS_URL: "http://paperless.lan"
+      PAPERLESS_TIME_ZONE: "${TZ:-Europe/Amsterdam}"
+      # OCR languages: Dutch + English. Add more (deu, fra) if you need them.
+      PAPERLESS_OCR_LANGUAGE: "nld+eng"
+      PAPERLESS_SECRET_KEY: "${PAPERLESS_SECRET_KEY}"
+      PAPERLESS_ADMIN_USER: "${PAPERLESS_ADMIN_USER:-mike}"
+      PAPERLESS_ADMIN_PASSWORD: "${PAPERLESS_ADMIN_PASSWORD}"
+    volumes:
+      - paperless-data:/usr/src/paperless/data
+      - paperless-media:/usr/src/paperless/media
+      - paperless-consume:/usr/src/paperless/consume
+      - paperless-export:/usr/src/paperless/export
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.paperless.rule=Host(`paperless.lan`)"
+      - "traefik.http.routers.paperless.entrypoints=web"
+      - "traefik.http.routers.paperless.middlewares=security-headers@file"
+      - "traefik.http.services.paperless.loadbalancer.server.port=8000"
+
+volumes:
+  paperless-redis:
+  paperless-data:
+  paperless-media:
+  paperless-consume:
+  paperless-export:
+
+networks:
+  proxy:
+    external: true

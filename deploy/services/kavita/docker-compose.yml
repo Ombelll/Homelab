@@ -1,0 +1,37 @@
+# Kavita — ebooks / comics / manga server with a slick reader. books.lan.
+# Reads its library from a subdir of the existing /mnt/media mount, so no new
+# mount is needed — create /mnt/media/books and drop your files in (see
+# deploy/fase-7-services.md).
+#
+#   docker compose --env-file /opt/Homelab/.env -f deploy/services/kavita/docker-compose.yml up -d
+
+services:
+  kavita:
+    image: lscr.io/linuxserver/kavita:latest
+    container_name: kavita
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
+      TZ: "${TZ:-Europe/Amsterdam}"
+    volumes:
+      - kavita-config:/config
+      - /mnt/media/books:/books
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.kavita.rule=Host(`books.lan`)"
+      - "traefik.http.routers.kavita.entrypoints=web"
+      - "traefik.http.routers.kavita.middlewares=security-headers@file"
+      - "traefik.http.services.kavita.loadbalancer.server.port=5000"
+
+volumes:
+  kavita-config:
+
+networks:
+  proxy:
+    external: true

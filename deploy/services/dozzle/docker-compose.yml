@@ -1,0 +1,55 @@
+# Dozzle — live, real-time Docker logs in the browser. logs.lan.
+# Talks to Docker through the existing read-only socket-proxy (same pattern as
+# Traefik/Watchtower) instead of bind-mounting the raw docker.sock, so it can
+# only read container metadata + logs, never control the daemon.
+#
+# ⚠️ No built-in authentication in this config — keep it LAN/tailnet only,
+# never expose it publicly.
+#
+#   docker compose -f deploy/services/dozzle/docker-compose.yml up -d
+
+services:
+  dozzle-socket-proxy:
+    image: lscr.io/linuxserver/socket-proxy:latest
+    container_name: dozzle-socket-proxy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      CONTAINERS: "1"
+      POST: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    tmpfs:
+      - /run
+    networks:
+      - dozzle-internal
+
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - dozzle-socket-proxy
+    environment:
+      DOZZLE_NO_ANALYTICS: "true"
+      DOZZLE_REMOTE_HOST: "tcp://dozzle-socket-proxy:2375"
+    networks:
+      - proxy
+      - dozzle-internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.dozzle.rule=Host(`logs.lan`)"
+      - "traefik.http.routers.dozzle.entrypoints=web"
+      - "traefik.http.routers.dozzle.middlewares=security-headers@file"
+      - "traefik.http.services.dozzle.loadbalancer.server.port=8080"
+
+networks:
+  proxy:
+    external: true
+  dozzle-internal:
+    driver: bridge
+    internal: true

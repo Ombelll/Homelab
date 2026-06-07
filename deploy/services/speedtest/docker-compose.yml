@@ -1,0 +1,40 @@
+# speedtest-tracker — runs periodic Ookla speed tests and charts your ISP
+# performance over time. speed.lan. SQLite (state in a named volume). Needs an
+# APP_KEY (base64:...) in .env — see deploy/fase-7-services.md.
+#
+#   docker compose --env-file /opt/Homelab/.env -f deploy/services/speedtest/docker-compose.yml up -d
+
+services:
+  speedtest-tracker:
+    image: lscr.io/linuxserver/speedtest-tracker:latest
+    container_name: speedtest-tracker
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
+      TZ: "${TZ:-Europe/Amsterdam}"
+      APP_KEY: "${SPEEDTEST_APP_KEY}"
+      APP_URL: "http://speed.lan"
+      DB_CONNECTION: "sqlite"
+      # Hourly test. Cron syntax; tune to taste.
+      SPEEDTEST_SCHEDULE: "0 * * * *"
+    volumes:
+      - speedtest-config:/config
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.speedtest.rule=Host(`speed.lan`)"
+      - "traefik.http.routers.speedtest.entrypoints=web"
+      - "traefik.http.routers.speedtest.middlewares=security-headers@file"
+      - "traefik.http.services.speedtest.loadbalancer.server.port=80"
+
+volumes:
+  speedtest-config:
+
+networks:
+  proxy:
+    external: true

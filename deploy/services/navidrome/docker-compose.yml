@@ -1,0 +1,38 @@
+# Navidrome — self-hosted music streaming (Subsonic/Airsonic-compatible apps).
+# Reached at music.lan. Reads your music collection read-only from a subdir of
+# the existing /mnt/media mount, so no new mount is needed — just create
+# /mnt/media/music and drop your library in (see deploy/fase-7-services.md).
+#
+#   docker compose --env-file /opt/Homelab/.env -f deploy/services/navidrome/docker-compose.yml up -d
+
+services:
+  navidrome:
+    image: deluan/navidrome:latest
+    container_name: navidrome
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: "${PUID:-1000}:${PGID:-1000}"
+    environment:
+      ND_SCANSCHEDULE: "1h"
+      ND_LOGLEVEL: "info"
+      ND_SESSIONTIMEOUT: "24h"
+    volumes:
+      - navidrome-data:/data
+      - /mnt/media/music:/music:ro
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.navidrome.rule=Host(`music.lan`)"
+      - "traefik.http.routers.navidrome.entrypoints=web"
+      - "traefik.http.routers.navidrome.middlewares=security-headers@file"
+      - "traefik.http.services.navidrome.loadbalancer.server.port=4533"
+
+volumes:
+  navidrome-data:
+
+networks:
+  proxy:
+    external: true
