@@ -29,6 +29,9 @@ services:
       PAPERLESS_TIME_ZONE: "${TZ:-Europe/Amsterdam}"
       # OCR languages: Dutch + English. Add more (deu, fra) if you need them.
       PAPERLESS_OCR_LANGUAGE: "nld+eng"
+      # Language PACKS to install at first boot (space-separated). Must cover any
+      # non-eng language used above, or Paperless fails its startup system check.
+      PAPERLESS_OCR_LANGUAGES: "nld eng"
       PAPERLESS_SECRET_KEY: "${PAPERLESS_SECRET_KEY}"
       PAPERLESS_ADMIN_USER: "${PAPERLESS_ADMIN_USER:-mike}"
       PAPERLESS_ADMIN_PASSWORD: "${PAPERLESS_ADMIN_PASSWORD}"
