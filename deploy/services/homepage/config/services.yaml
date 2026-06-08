@@ -6,28 +6,76 @@
         href: https://proxmox-01.tailf562d8.ts.net
         description: Homelab Control Center — metrics, alerts, backups
         icon: mdi-monitor-dashboard
-    - Proxmox VE:
+    - Proxmox-01:
         href: https://192.168.1.10:8006
-        description: Hypervisor — host, CTs, storage
+        description: Node 1 — hypervisor (cluster)
         icon: proxmox
-    - Uptime Kuma:
-        href: http://uptime.lan
-        description: App uptime monitoring
-        icon: uptime-kuma
+    - Proxmox-02:
+        href: https://192.168.1.11:8006
+        description: Node 2 — hypervisor (cluster)
+        icon: proxmox
+    - Proxmox Backup Server:
+        href: https://192.168.1.11:8007
+        description: Off-box backups (node 2)
+        icon: proxmox-backup-server
+    - Dockge:
+        href: http://dockge.lan
+        description: Docker-compose stack manager
+        icon: dockge
+
+- Media:
+    - Jellyfin:
+        href: http://jellyfin.lan
+        description: Movies & series
+        icon: jellyfin
+    - Jellyseerr:
+        href: http://requests.lan
+        description: Media requests
+        icon: jellyseerr
+    - Navidrome:
+        href: http://music.lan
+        description: Music streaming
+        icon: navidrome
+    - Kavita:
+        href: http://books.lan
+        description: E-books / comics / manga
+        icon: kavita
+
+- Downloads:
+    - Prowlarr:
+        href: http://prowlarr.lan
+        description: Indexer manager
+        icon: prowlarr
+    - Sonarr:
+        href: http://sonarr.lan
+        description: Series
+        icon: sonarr
+    - Radarr:
+        href: http://radarr.lan
+        description: Movies
+        icon: radarr
+    - Bazarr:
+        href: http://bazarr.lan
+        description: Subtitles
+        icon: bazarr
+    - qBittorrent:
+        href: http://qb.lan
+        description: Download client
+        icon: qbittorrent
 
 - Apps:
     - Immich:
         href: http://immich.lan
         description: Photo & video backup
         icon: immich
-    - Jellyfin:
-        href: http://jellyfin.lan
-        description: Movies & series
-        icon: jellyfin
     - Nextcloud:
         href: http://nextcloud.lan
         description: Files, calendar, contacts
         icon: nextcloud
+    - Paperless-ngx:
+        href: http://paperless.lan
+        description: Document scanning & archive
+        icon: paperless-ngx
     - Vaultwarden:
         href: https://docker.tailf562d8.ts.net
         description: Passwords (Bitwarden-compatible)
@@ -41,7 +89,29 @@
         description: Self-hosted Git
         icon: forgejo
 
-- Network & Admin:
+- Tools:
+    - SearXNG:
+        href: http://search.lan
+        description: Private metasearch
+        icon: searxng
+    - Stirling-PDF:
+        href: http://pdf.lan
+        description: PDF toolkit
+        icon: stirling-pdf
+    - IT-Tools:
+        href: http://tools.lan
+        description: Dev/sysadmin utilities
+        icon: mdi-tools
+
+- Monitoring & Network:
+    - Uptime Kuma:
+        href: http://uptime.lan
+        description: App uptime monitoring
+        icon: uptime-kuma
+    - speedtest-tracker:
+        href: http://speed.lan
+        description: Internet speed over time
+        icon: speedtest-tracker
     - AdGuard Home:
         href: http://192.168.1.21:3000
         description: Network DNS + ad/tracker blocking
