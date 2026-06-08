@@ -181,7 +181,7 @@ function Group({
                       : <span className="text-muted-foreground">—</span>}
                   </span>
                   {c.cpuSeries.length >= 2 ? (
-                    <Sparkline values={c.cpuSeries} width={56} height={16} tone="primary" />
+                    <Sparkline values={normSpark(c.cpuSeries)} width={56} height={16} tone="primary" />
                   ) : null}
                 </div>
               </Td>
@@ -194,7 +194,7 @@ function Group({
                       : <span className="text-muted-foreground">—</span>}
                   </span>
                   {c.memSeries.length >= 2 ? (
-                    <Sparkline values={c.memSeries} width={56} height={16} tone="primary" />
+                    <Sparkline values={normSpark(c.memSeries)} width={56} height={16} tone="primary" />
                   ) : null}
                 </div>
               </Td>
@@ -236,6 +236,15 @@ function Th({ children, className = "" }: { children: React.ReactNode; className
 
 function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <td className={`px-4 py-3 align-top ${className}`}>{children}</td>;
+}
+
+// The Sparkline normalises over a fixed 0..100 Y axis, so any series in other
+// units (memory bytes, or CPU that can exceed 100% on multi-core) must be
+// rescaled to its own max first — otherwise the area fill renders far outside
+// the SVG box (overflow-visible) as a giant blue block.
+function normSpark(arr: number[]): number[] {
+  const max = Math.max(1, ...arr);
+  return arr.map((v) => (v / max) * 100);
 }
 
 function formatBytes(n: number): string {
