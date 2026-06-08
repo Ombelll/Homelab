@@ -18,11 +18,13 @@ import {
   Network,
   Gauge,
   FileText,
+  LayoutGrid,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/apps", label: "Apps", icon: LayoutGrid },
   { href: "/servers", label: "Servers", icon: Server },
   { href: "/containers", label: "Containers", icon: Boxes },
   { href: "/network", label: "Network", icon: Network },
