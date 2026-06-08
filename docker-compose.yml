@@ -35,6 +35,12 @@ services:
       QUIET_HOURS_END: "${QUIET_HOURS_END:-}"
       STATUS_PAGE_TOKEN: "${STATUS_PAGE_TOKEN:-}"
       POWER_PRICE_EUR_PER_KWH: "${POWER_PRICE_EUR_PER_KWH:-0.34}"
+      # WAN page: pull speed history from speedtest-tracker. URL defaults to the
+      # container name on the shared `proxy` network; token is created in the
+      # speedtest-tracker UI (profile -> API Tokens). Empty token = WAN page
+      # shows a "configure" hint instead of charts.
+      SPEEDTEST_URL: "${SPEEDTEST_URL:-http://speedtest-tracker}"
+      SPEEDTEST_API_TOKEN: "${SPEEDTEST_API_TOKEN:-}"
       NODE_ENV: production
     volumes:
       # Legacy: held the old SQLite DB before the Postgres migration. Kept
