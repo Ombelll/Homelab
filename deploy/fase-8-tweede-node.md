@@ -10,8 +10,15 @@ Goal, in order of value: ① off-box backups (PBS) → ② monitoring (agent) �
 ## 0. Post-install (DONE / verify)
 - [x] Hostname `Proxmox-02.home`, IP `192.168.1.11`, DNS `9.9.9.9`+`1.1.1.1`.
 - [x] Enterprise repos disabled, `pve-no-subscription` added, `apt update` clean.
-- [x] `apt full-upgrade` + reboot.
+- [x] `apt full-upgrade` + reboot (now PVE 8.4.19, kernel 6.8.12-29).
 - [ ] USB install stick (sdb) removed.
+
+## STATUS (2026-06-08)
+- [x] **PBS live** — pool `bkp` on the Verbatim SSD, datastore `main`, storage `pbs`
+      added on node 1 (active), daily job 02:30, test backup of CT100 OK.
+- [ ] Agent on Proxmox-02 (step 2)
+- [ ] 2nd AdGuard (step 3)
+- [ ] Cluster + QDevice (step 4)
 
 ---
 
@@ -20,7 +27,10 @@ Goal, in order of value: ① off-box backups (PBS) → ② monitoring (agent) �
 Run Proxmox Backup Server **co-installed on the PVE node** (fine for a homelab).
 
 ```sh
-# On Proxmox-02. Install the PBS package (uses the same no-sub repo).
+# On Proxmox-02. PBS is NOT in the PVE repo — add the PBS no-subscription repo:
+echo "deb http://download.proxmox.com/debian/pbs bookworm pbs-no-subscription" \
+  > /etc/apt/sources.list.d/pbs-no-subscription.list
+apt update
 apt install -y proxmox-backup-server          # PBS UI then on https://192.168.1.11:8007
 
 # ZFS pool on the empty Verbatim SSD (integrity + compression). Verify the disk
@@ -38,23 +48,39 @@ proxmox-backup-manager datastore create main /bkp/datastore
 proxmox-backup-manager cert info | grep -i fingerprint
 ```
 
-Create a PBS user/token for node 1 to authenticate with (in the PBS UI at
-`:8007` → Access Control, or CLI):
+Create a PBS user + API token for node 1. ⚠️ **Token privilege-separation
+gotcha:** a token's effective rights are the *intersection* of the user's and
+the token's ACLs — so grant the role to **both** the user AND the token, or
+node 1 gets "Cannot find datastore 'main'".
 ```sh
-proxmox-backup-manager user create backup@pbs --password '<strong-pw>'
-proxmox-backup-manager acl update /datastore/main DatastoreAdmin --auth-id backup@pbs
+proxmox-backup-manager user create backup@pbs --password "$(openssl rand -base64 24)"
+# Token secret prints once / capture it; here we write it to a root-only file:
+proxmox-backup-manager user generate-token backup@pbs node1 > /root/pbs-node1-token.json
+proxmox-backup-manager acl update /datastore/main DatastoreAdmin --auth-id 'backup@pbs'
+proxmox-backup-manager acl update /datastore/main DatastoreAdmin --auth-id 'backup@pbs!node1'
+proxmox-backup-manager cert info | grep -i fingerprint   # note the SHA-256 fp
 ```
 
-### Wire it into node 1
-On **Proxmox-01** UI → Datacenter → Storage → Add → **Proxmox Backup Server**:
-- ID `pbs`, Server `192.168.1.11`, Datastore `main`
-- Username `backup@pbs`, password as above
-- Fingerprint: paste from the command above
-- Content: VZDump backup file
+### Wire it into node 1 (CLI)
+On **Proxmox-01** — token value from the file, fingerprint from above:
+```sh
+pvesm add pbs pbs --server 192.168.1.11 --datastore main \
+  --username 'backup@pbs!node1' --password '<TOKEN-VALUE>' \
+  --fingerprint '<SHA256-FP>' --content backup
+pvesm status        # pbs should show "active"
+# (shred the token file on node 2 afterwards: shred -u /root/pbs-node1-token.json)
+```
 
-Then Datacenter → Backup → Add a job: both CTs (100, 101) → storage `pbs`,
-daily, keep e.g. last 7 / 4 weekly / 6 monthly. This is the real win: backups
-now live on a **different machine**, not on node 1's tank.
+Then schedule a daily job (keeps the existing local tank-backup job too —
+belt and suspenders):
+```sh
+pvesh create /cluster/backup --schedule "02:30" --storage pbs --vmid 100,101 \
+  --mode snapshot --notes-template "{{guestname}}" \
+  --prune-backups "keep-daily=7,keep-weekly=4,keep-monthly=6" \
+  --comment "Off-box naar PBS node2"
+```
+This is the real win: backups now live on a **different machine**, not on
+node 1's tank. Verified working 2026-06-08 (CT100: 1.46 GiB → 572 MiB in 13 s).
 
 > Optional: also keep the local nightly vzdump to `tank-backup` for fast local
 > restores — belt and suspenders.
