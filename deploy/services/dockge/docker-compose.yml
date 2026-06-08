@@ -1,0 +1,40 @@
+# Dockge — web UI to manage Docker Compose stacks (start/stop/edit/logs/update).
+# dockge.lan. Manages stacks under /opt/stacks (its own convention). Your
+# existing /opt/Homelab/deploy/services stacks aren't auto-imported, but you can
+# create/manage new ones here, or `docker compose` them in from /opt/stacks.
+#
+# ⚠️ Needs full (read-write) Docker-socket access to run compose — it can't use
+# the read-only socket-proxy. Keep dockge.lan LAN/tailnet-only.
+#
+#   mkdir -p /opt/stacks
+#   docker compose -f deploy/services/dockge/docker-compose.yml up -d
+
+services:
+  dockge:
+    image: louislam/dockge:1
+    container_name: dockge
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - dockge-data:/app/data
+      - /opt/stacks:/opt/stacks
+    environment:
+      DOCKGE_STACKS_DIR: /opt/stacks
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.dockge.rule=Host(`dockge.lan`)"
+      - "traefik.http.routers.dockge.entrypoints=web"
+      - "traefik.http.routers.dockge.middlewares=security-headers@file"
+      - "traefik.http.services.dockge.loadbalancer.server.port=5001"
+
+volumes:
+  dockge-data:
+
+networks:
+  proxy:
+    external: true

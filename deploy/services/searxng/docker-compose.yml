@@ -1,0 +1,30 @@
+# SearXNG — private, self-hosted metasearch engine (no tracking). search.lan.
+# Generates its config + a random secret in the volume on first boot.
+#
+#   docker compose -f deploy/services/searxng/docker-compose.yml up -d
+
+services:
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    restart: unless-stopped
+    environment:
+      SEARXNG_BASE_URL: "http://search.lan/"
+    volumes:
+      - searxng-config:/etc/searxng
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.searxng.rule=Host(`search.lan`)"
+      - "traefik.http.routers.searxng.entrypoints=web"
+      - "traefik.http.routers.searxng.middlewares=security-headers@file"
+      - "traefik.http.services.searxng.loadbalancer.server.port=8080"
+
+volumes:
+  searxng-config:
+
+networks:
+  proxy:
+    external: true

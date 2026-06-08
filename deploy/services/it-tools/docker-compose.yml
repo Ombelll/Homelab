@@ -1,0 +1,25 @@
+# IT-Tools — a big box of handy offline dev/sysadmin utilities (encoders,
+# converters, generators, formatters, network calculators, ...). tools.lan.
+#
+#   docker compose -f deploy/services/it-tools/docker-compose.yml up -d
+
+services:
+  it-tools:
+    image: corentinth/it-tools:latest
+    container_name: it-tools
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.ittools.rule=Host(`tools.lan`)"
+      - "traefik.http.routers.ittools.entrypoints=web"
+      - "traefik.http.routers.ittools.middlewares=security-headers@file"
+      - "traefik.http.services.ittools.loadbalancer.server.port=80"
+
+networks:
+  proxy:
+    external: true

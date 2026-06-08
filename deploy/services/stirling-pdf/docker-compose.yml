@@ -1,0 +1,35 @@
+# Stirling-PDF — local, private PDF toolkit (merge/split/OCR/convert/sign/...).
+# pdf.lan. Fully self-contained; nothing leaves your network.
+#
+#   docker compose -f deploy/services/stirling-pdf/docker-compose.yml up -d
+
+services:
+  stirling-pdf:
+    image: stirlingtools/stirling-pdf:latest
+    container_name: stirling-pdf
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      DOCKER_ENABLE_SECURITY: "false"
+      LANGS: "en_GB,nl_NL"
+    volumes:
+      - stirling-tessdata:/usr/share/tessdata
+      - stirling-configs:/configs
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.stirling.rule=Host(`pdf.lan`)"
+      - "traefik.http.routers.stirling.entrypoints=web"
+      - "traefik.http.routers.stirling.middlewares=security-headers@file"
+      - "traefik.http.services.stirling.loadbalancer.server.port=8080"
+
+volumes:
+  stirling-tessdata:
+  stirling-configs:
+
+networks:
+  proxy:
+    external: true
