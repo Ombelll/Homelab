@@ -17,7 +17,8 @@ Goal, in order of value: ① off-box backups (PBS) → ② monitoring (agent) �
 - [x] **PBS live** — pool `bkp` on the Verbatim SSD, datastore `main`, storage `pbs`
       added on node 1 (active), daily job 02:30, test backup of CT100 OK.
 - [x] **Agent on Proxmox-02** — running, reporting to dashboard as `Proxmox-02` (online).
-- [ ] 2nd AdGuard (step 3)
+- [~] **2nd AdGuard** — CT 110 (adguard2, 192.168.1.22) created + AdGuard Home installed
+      & running. Remaining (your side): wizard + match node-1 config + DHCP dual-DNS.
 - [ ] Cluster + QDevice (step 4) — note: `pvecm add` needs node-1 root password.
 
 ---
@@ -124,14 +125,24 @@ Run a 2nd AdGuard **independent of node 1** so DNS survives either node dying.
 Simplest: a small LXC on Proxmox-02 running AdGuard Home.
 
 ```sh
-# On Proxmox-02: create a Debian LXC (e.g. CT 110, 192.168.1.22), then inside it:
-#   curl -s -S -L https://raw.githubusercontent.com/AdguardTeam/AdGuardHome/master/scripts/install.sh | sh -s -- -v
-# Configure it identically to the node-1 AdGuard (same rewrites + upstreams
-# DoH/DoT to 9.9.9.9 / 1.1.1.1). AdGuard has no native HA, so either keep the
-# two in sync by hand or use a sync tool.
+# On Proxmox-02 — Debian LXC (CT 110, 192.168.1.22), then install AdGuard in it:
+pveam update; pveam download local debian-12-standard_12.12-1_amd64.tar.zst
+pct create 110 local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst \
+  --hostname adguard2 --cores 1 --memory 512 --swap 256 \
+  --net0 name=eth0,bridge=vmbr0,ip=192.168.1.22/24,gw=192.168.1.1 \
+  --nameserver 9.9.9.9 --rootfs local-lvm:4 --unprivileged 1 \
+  --features nesting=1 --onboot 1 --start 1
+pct exec 110 -- bash -c "apt-get update -qq; apt-get install -y -qq curl ca-certificates; \
+  curl -s -S -L https://raw.githubusercontent.com/AdguardTeam/AdGuardHome/master/scripts/install.sh | sh -s -- -v"
+# AdGuard then runs on http://192.168.1.22:3000 (setup wizard).
 ```
-Then hand out **both** AdGuard IPs via DHCP (primary `192.168.1.21`, secondary
-`192.168.1.22`). Now a node outage no longer takes DNS down.
+Finish (your side — involves a password + router):
+1. Open `http://192.168.1.22:3000`, run the wizard (admin account; DNS :53, UI :80/:3000).
+2. Match node 1: upstreams DoH to `9.9.9.9`/`1.1.1.1`, same blocklists, and the
+   `*.lan` DNS rewrites → `192.168.1.21`. AdGuard has no native HA — copy node 1's
+   `AdGuardHome.yaml` or replicate the rewrites by hand.
+3. Hand out **both** AdGuard IPs via DHCP (primary `192.168.1.21`, secondary
+   `192.168.1.22`). Now a node outage no longer takes DNS down.
 
 ---
 
