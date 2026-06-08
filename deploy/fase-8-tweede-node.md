@@ -16,9 +16,9 @@ Goal, in order of value: ① off-box backups (PBS) → ② monitoring (agent) �
 ## STATUS (2026-06-08)
 - [x] **PBS live** — pool `bkp` on the Verbatim SSD, datastore `main`, storage `pbs`
       added on node 1 (active), daily job 02:30, test backup of CT100 OK.
-- [ ] Agent on Proxmox-02 (step 2)
+- [x] **Agent on Proxmox-02** — running, reporting to dashboard as `Proxmox-02` (online).
 - [ ] 2nd AdGuard (step 3)
-- [ ] Cluster + QDevice (step 4)
+- [ ] Cluster + QDevice (step 4) — note: `pvecm add` needs node-1 root password.
 
 ---
 
@@ -32,6 +32,9 @@ echo "deb http://download.proxmox.com/debian/pbs bookworm pbs-no-subscription" \
   > /etc/apt/sources.list.d/pbs-no-subscription.list
 apt update
 apt install -y proxmox-backup-server          # PBS UI then on https://192.168.1.11:8007
+# Installing PBS adds an ENTERPRISE repo (pbs-enterprise.list) that 401s without
+# a subscription and breaks future `apt update`/`apt install`. Disable it:
+sed -i 's|^deb|#deb|' /etc/apt/sources.list.d/pbs-enterprise.list
 
 # ZFS pool on the empty Verbatim SSD (integrity + compression). Verify the disk
 # first — it must be the 500 GB Verbatim, NOT the NVMe boot disk!
@@ -89,17 +92,29 @@ node 1's tank. Verified working 2026-06-08 (CT100: 1.46 GiB → 572 MiB in 13 s)
 
 ## 2. Monitoring agent on Proxmox-02 (shows up in the dashboard)
 
+The agent key = the dashboard's `AGENT_API_KEY` (same value node 1 uses; it's
+in node 1's `/etc/homelab-agent.env`). ⚠️ It's a 62-char hex string — verify you
+copied it exactly (a length/char mismatch → silent **401 unauthorized**). Sanity
+check: `grep -oP '(?<=AGENT_API_KEY=).*' /etc/homelab-agent.env | tr -d '\n' | sha256sum`
+must match on both nodes.
+
+Node 2 is NOT on the tailnet, so use the dashboard's **LAN** URL (CT101):
 ```sh
-# On Proxmox-02. Pull the repo (or scp the deploy/ dir over).
-apt install -y git
-git clone https://github.com/Ombelll/Homelab.git /opt/Homelab
-cd /opt/Homelab
-# Set the agent env: same AGENT_API_KEY as node 1, dashboard URL, node name.
-cp .env.example .env && nano .env      # set AGENT_API_KEY, DASHBOARD_URL=http://192.168.1.21:3000, AGENT_SERVER_NAME=Proxmox-02
-bash deploy/install-agent.sh
+# On Proxmox-02 — the script installs Node, clones to /opt/homelab-agent,
+# builds, writes /etc/homelab-agent.env (0600), and enables the systemd service.
+curl -fsSL https://raw.githubusercontent.com/Ombelll/Homelab/main/deploy/install-agent.sh -o /tmp/ia.sh
+DASHBOARD_URL=http://192.168.1.21:3000 \
+  AGENT_API_KEY='<62-hex from node 1>' \
+  AGENT_SERVER_NAME=Proxmox-02 \
+  bash /tmp/ia.sh
+journalctl -u homelab-agent -n 10 --no-pager   # expect "starting — host=Proxmox-02", no 401
 ```
 Within a tick `Proxmox-02` appears on the dashboard with its own metrics, ZFS
 pool (`bkp`), SMART, sensors, power. (The dashboard itself stays on CT101 / node 1.)
+
+> The agent warns that `http://192.168.1.21:3000` is plaintext — the key crosses
+> the LAN in the clear. Low risk on a home LAN; to harden, put node 2 on the
+> tailnet (`tailscale up`) and switch DASHBOARD_URL to the HTTPS tailnet name.
 
 ---
 
