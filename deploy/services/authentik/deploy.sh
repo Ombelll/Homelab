@@ -46,10 +46,13 @@ docker compose --env-file "$ENV_FILE" -f "$COMPOSE" up -d
 echo "== Status (first boot runs DB migrations — give it ~90s to go healthy) =="
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE" ps
 
+echo "== Seed akadmin + API token (idempotent; see bootstrap-admin.sh) =="
+bash "$REPO_ROOT/deploy/services/authentik/bootstrap-admin.sh" || \
+  echo "  (will be retried — re-run bootstrap-admin.sh once authentik is healthy)"
+
 cat <<'EOF'
 
 Next:
-  - Wait until authentik-server is healthy, then browse http://auth.lan
-    (login: akadmin + AUTHENTIK_BOOTSTRAP_PASSWORD from .env).
+  - Browse http://auth.lan and log in (akadmin + AUTHENTIK_BOOTSTRAP_PASSWORD).
   - Run deploy/services/authentik/configure-sso.sh to create the providers.
 EOF

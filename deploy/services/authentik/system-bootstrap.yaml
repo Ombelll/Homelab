@@ -1,0 +1,19 @@
+# No-op override for authentik's shipped /blueprints/system/bootstrap.yaml.
+#
+# WHY: the upstream bootstrap blueprint in the 2026.5.2 image creates the
+# akadmin user with the now-deprecated `groups:` attribute. On startup authentik
+# emits a deprecation log for that field, and formatting that log message calls
+# `!KeyOf admin-group`.__repr__ outside a resolution context, raising
+#   EntryInvalidError: KeyOf: failed to find entry with `id` of `admin-group`
+# in `post_worker_init` — which crash-loops every gunicorn worker, so the server
+# never serves (HTTP 502/404, container "unhealthy").
+#
+# We mount this empty blueprint over that path (server + worker) to stop the
+# crash, and seed the akadmin superuser + static API token ourselves, idempotently,
+# via bootstrap-admin.sh (reads AUTHENTIK_BOOTSTRAP_* from the container env).
+# Revisit on the next authentik upgrade — drop this override if upstream fixes
+# the deprecated field.
+version: 1
+metadata:
+  name: authentik Bootstrap (no-op override)
+entries: []

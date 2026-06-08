@@ -83,6 +83,9 @@ services:
       - authentik-templates:/templates
       # Blueprints applied on boot (idempotent, code-first config in git).
       - ./blueprints:/blueprints/homelab:ro
+      # No-op override of the buggy shipped bootstrap blueprint (see
+      # system-bootstrap.yaml). akadmin is seeded by bootstrap-admin.sh instead.
+      - ./system-bootstrap.yaml:/blueprints/system/bootstrap.yaml:ro
     depends_on:
       authentik-postgresql:
         condition: service_healthy
@@ -113,6 +116,7 @@ services:
       - authentik-templates:/templates
       - authentik-certs:/certs
       - ./blueprints:/blueprints/homelab:ro
+      - ./system-bootstrap.yaml:/blueprints/system/bootstrap.yaml:ro
     depends_on:
       authentik-postgresql:
         condition: service_healthy
