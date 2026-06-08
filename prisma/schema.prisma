@@ -48,6 +48,10 @@ model Server {
   // {name, quorate, nodes:[{name,online,local}], expectedVotes, totalVotes,
   // quorumNeeded, qdevice}. NULL on standalone / non-Proxmox hosts.
   clusterInfo         String?
+  // Proxmox Backup Server datastore status as JSON of
+  // {datastores:[{name,totalBytes,usedBytes,snapshots,lastBackupAt}]}.
+  // NULL on hosts that aren't a PBS server.
+  pbsInfo             String?
   // Age (hours) of the newest local backup the agent found (e.g. newest
   // vzdump in /tank/backups/dump). Only the host that owns the backups
   // reports it; drives the backup-stale alert. NULL on hosts without backups.

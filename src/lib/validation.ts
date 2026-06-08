@@ -153,6 +153,18 @@ export const clusterSchema = z.object({
   qdevice: z.boolean().optional(),
 });
 
+export const pbsDatastoreSchema = z.object({
+  name: z.string().min(1).max(255),
+  totalBytes: z.number().min(0).optional(),
+  usedBytes: z.number().min(0).optional(),
+  snapshots: z.number().int().min(0),
+  lastBackupAt: z.string().datetime().optional(),
+});
+
+export const pbsSchema = z.object({
+  datastores: z.array(pbsDatastoreSchema).max(64),
+});
+
 // Combined per-tick payload — the agent sends everything in one POST to
 // /api/agent/report instead of five separate calls. Every section beyond the
 // three core gauges is optional, so a partial collection (one collector
@@ -179,6 +191,7 @@ export const reportSchema = z.object({
   smartDevices: z.array(smartDeviceSchema).max(64).optional(),
   ups: upsSchema.optional(),
   cluster: clusterSchema.optional(),
+  pbs: pbsSchema.optional(),
 });
 
 export type ContainerInput = z.infer<typeof containerInputSchema>;

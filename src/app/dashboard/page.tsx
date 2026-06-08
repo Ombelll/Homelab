@@ -17,6 +17,16 @@ type ClusterInfo = {
   qdevice?: boolean;
 };
 
+type PbsInfo = {
+  datastores: {
+    name: string;
+    totalBytes?: number;
+    usedBytes?: number;
+    snapshots: number;
+    lastBackupAt?: string;
+  }[];
+};
+
 async function getDashboardData() {
   const [servers, containers, alerts] = await Promise.all([
     prisma.server.findMany({
@@ -60,6 +70,19 @@ async function getDashboardData() {
     }
   }
 
+  // PBS: freshest non-null pbsInfo from any node (the PBS host reports it).
+  let pbs: PbsInfo | null = null;
+  const pbsServers = servers
+    .filter((s) => s.pbsInfo)
+    .sort((a, b) => (b.lastSeenAt?.getTime() ?? 0) - (a.lastSeenAt?.getTime() ?? 0));
+  if (pbsServers[0]?.pbsInfo) {
+    try {
+      pbs = JSON.parse(pbsServers[0].pbsInfo) as PbsInfo;
+    } catch {
+      pbs = null;
+    }
+  }
+
   // Fleet-wide power draw: sum the latest per-server snapshot (RAPL on hosts
   // that expose it). null when no host reports power at all.
   const powerServers = servers.filter((s) => s.powerWatts != null);
@@ -75,6 +98,7 @@ async function getDashboardData() {
     power: { totalWatts, hosts: powerServers.length },
     alerts,
     cluster,
+    pbs,
   };
 }
 
@@ -115,6 +139,8 @@ export default async function DashboardPage() {
       </div>
 
       {data.cluster ? <ClusterPanel cluster={data.cluster} /> : null}
+
+      {data.pbs ? <PbsPanel pbs={data.pbs} /> : null}
 
       <div className="mt-6 rounded-xl border border-border bg-card p-5">
         <div className="mb-4 flex items-center justify-between">
@@ -225,6 +251,56 @@ function Row({ label, value }: { label: string; value: string }) {
       <span className="tabular-nums">{value}</span>
     </div>
   );
+}
+
+function PbsPanel({ pbs }: { pbs: PbsInfo }) {
+  return (
+    <div className="mt-6 rounded-xl border border-border bg-card p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <HardDrive className="h-4 w-4 text-muted-foreground" />
+        <h2 className="text-sm font-semibold">Backups (PBS)</h2>
+      </div>
+      <div className="space-y-4">
+        {pbs.datastores.map((ds) => {
+          const pct =
+            ds.totalBytes && ds.usedBytes != null ? (ds.usedBytes / ds.totalBytes) * 100 : null;
+          return (
+            <div key={ds.name}>
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="font-medium">{ds.name}</span>
+                <span className="text-xs text-muted-foreground">
+                  {ds.snapshots} snapshot{ds.snapshots === 1 ? "" : "s"}
+                  {ds.lastBackupAt
+                    ? ` · last ${formatRelativeTime(new Date(ds.lastBackupAt))}`
+                    : " · no backups yet"}
+                </span>
+              </div>
+              <ProgressBar value={pct ?? 0} />
+              <div className="mt-1 text-xs tabular-nums text-muted-foreground">
+                {ds.usedBytes != null && ds.totalBytes
+                  ? `${formatBytes(ds.usedBytes)} / ${formatBytes(ds.totalBytes)}${
+                      pct != null ? ` (${pct.toFixed(1)}%)` : ""
+                    }`
+                  : "—"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const units = ["KiB", "MiB", "GiB", "TiB"];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
 }
 
 function ResourceCard({

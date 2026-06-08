@@ -30,6 +30,7 @@ import { getPowerWatts } from "./power.js";
 import { getLogs } from "./logs.js";
 import { getZfsPools } from "./zfs.js";
 import { getClusterInfo } from "./cluster.js";
+import { getPbsInfo } from "./pbs.js";
 import { startJobRunner } from "./runner.js";
 
 let dockerWarned = false;
@@ -73,6 +74,7 @@ async function tick() {
     getUps(), //              15
     getPowerWatts(), //       16
     getClusterInfo(), //      17
+    getPbsInfo(), //          18
   ]);
   const val = <T>(i: number, fallback: T): T =>
     settled[i].status === "fulfilled"
@@ -104,6 +106,7 @@ async function tick() {
     sensors: nonEmpty(val(5, [])),
     zfsPools: nonEmpty(val(7, [])),
     cluster: val<Awaited<ReturnType<typeof getClusterInfo>>>(17, undefined),
+    pbs: val<Awaited<ReturnType<typeof getPbsInfo>>>(18, undefined),
   };
 
   try {
