@@ -17,9 +17,16 @@ Goal, in order of value: ① off-box backups (PBS) → ② monitoring (agent) �
 - [x] **PBS live** — pool `bkp` on the Verbatim SSD, datastore `main`, storage `pbs`
       added on node 1 (active), daily job 02:30, test backup of CT100 OK.
 - [x] **Agent on Proxmox-02** — running, reporting to dashboard as `Proxmox-02` (online).
-- [~] **2nd AdGuard** — CT 110 (adguard2, 192.168.1.22) created + AdGuard Home installed
-      & running. Remaining (your side): wizard + match node-1 config + DHCP dual-DNS.
-- [ ] Cluster + QDevice (step 4) — note: `pvecm add` needs node-1 root password.
+- [x] **Cluster `homelab` live** — 2 nodes, Quorate (Proxmox-01 + Proxmox-02), manage
+      both from one UI. ⚠️ Joining needs node 2 GUEST-FREE (had to destroy CT 110 first)
+      and the node-1 root password at the `pvecm add` prompt.
+- [~] **2nd AdGuard** — CT 110 (adguard2, 192.168.1.22) recreated after the join +
+      AdGuard Home installed & running. Remaining (your side): wizard + match node-1
+      config + DHCP dual-DNS.
+- [ ] **QDevice** — still needed: with 2 votes, if one node dies the survivor loses
+      quorum and /etc/pve goes read-only. Add a 3rd vote on an always-on box
+      (GL.iNet router / Pi): `apt install corosync-qnetd` there, `corosync-qdevice`
+      on both nodes, then `pvecm qdevice setup <ip>`.
 
 ---
 
