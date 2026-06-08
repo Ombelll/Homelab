@@ -1,0 +1,136 @@
+# authentik — single sign-on / identity provider for the homelab. auth.lan.
+#
+# Two roles share one image: `server` (web UI + API + the *embedded outpost*
+# that Traefik forward-auth talks to) and `worker` (background tasks, blueprint
+# application, e-mail, cert rotation). A dedicated Postgres + Redis back them —
+# authentik wants its own DB, so we don't share CT 100's Postgres.
+#
+# SECURITY: the worker does NOT mount the Docker socket. We only ever use the
+# *embedded* outpost (runs inside `server`), so authentik never needs to manage
+# Docker — keeping it off the root-equivalent socket, same rule as Traefik.
+#
+# Secrets live in the host .env (0600), never in git:
+#   AUTHENTIK_TAG, AUTHENTIK_SECRET_KEY, AUTHENTIK_PG_PASS,
+#   AUTHENTIK_BOOTSTRAP_PASSWORD, AUTHENTIK_BOOTSTRAP_TOKEN
+#
+#   docker compose -f deploy/services/authentik/docker-compose.yml up -d
+
+x-authentik-env: &authentik-env
+  AUTHENTIK_SECRET_KEY: "${AUTHENTIK_SECRET_KEY:?set AUTHENTIK_SECRET_KEY in .env}"
+  AUTHENTIK_REDIS__HOST: authentik-redis
+  AUTHENTIK_POSTGRESQL__HOST: authentik-postgresql
+  AUTHENTIK_POSTGRESQL__USER: authentik
+  AUTHENTIK_POSTGRESQL__NAME: authentik
+  AUTHENTIK_POSTGRESQL__PASSWORD: "${AUTHENTIK_PG_PASS:?set AUTHENTIK_PG_PASS in .env}"
+  # First-boot only: seed the default akadmin account + a static API token so we
+  # can configure providers/apps over the REST API without UI clicking. Mike
+  # rotates the password (and can revoke the token) after setup.
+  AUTHENTIK_BOOTSTRAP_PASSWORD: "${AUTHENTIK_BOOTSTRAP_PASSWORD:-}"
+  AUTHENTIK_BOOTSTRAP_TOKEN: "${AUTHENTIK_BOOTSTRAP_TOKEN:-}"
+  AUTHENTIK_BOOTSTRAP_EMAIL: "${AUTHENTIK_BOOTSTRAP_EMAIL:-admin@lan}"
+  # The outpost calls back to the server over plain HTTP inside the proxy net.
+  AUTHENTIK_DISABLE_STARTUP_ANALYTICS: "true"
+  AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+
+services:
+  authentik-postgresql:
+    image: docker.io/library/postgres:16-alpine
+    container_name: authentik-postgresql
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s
+    environment:
+      POSTGRES_USER: authentik
+      POSTGRES_DB: authentik
+      POSTGRES_PASSWORD: "${AUTHENTIK_PG_PASS:?set AUTHENTIK_PG_PASS in .env}"
+    volumes:
+      - authentik-database:/var/lib/postgresql/data
+    networks:
+      - authentik-internal
+
+  authentik-redis:
+    image: docker.io/library/redis:7-alpine
+    container_name: authentik-redis
+    command: --save 60 1 --loglevel warning
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 3s
+    volumes:
+      - authentik-redis:/data
+    networks:
+      - authentik-internal
+
+  authentik-server:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG:-2026.5.2}
+    container_name: authentik-server
+    command: server
+    restart: unless-stopped
+    environment: *authentik-env
+    volumes:
+      - authentik-media:/media
+      - authentik-templates:/templates
+      # Blueprints applied on boot (idempotent, code-first config in git).
+      - ./blueprints:/blueprints/homelab:ro
+    depends_on:
+      authentik-postgresql:
+        condition: service_healthy
+      authentik-redis:
+        condition: service_healthy
+    networks:
+      - proxy
+      - authentik-internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      # auth.lan serves the UI; the /outpost.goauthentik.io/ prefix on ANY host
+      # is the forward-auth callback — both land on this one router/service.
+      - "traefik.http.routers.authentik.rule=Host(`auth.lan`) || PathPrefix(`/outpost.goauthentik.io/`)"
+      - "traefik.http.routers.authentik.entrypoints=web"
+      - "traefik.http.routers.authentik.middlewares=security-headers@file"
+      - "traefik.http.services.authentik.loadbalancer.server.port=9000"
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG:-2026.5.2}
+    container_name: authentik-worker
+    command: worker
+    restart: unless-stopped
+    # No Docker socket: embedded-outpost-only setup (see header).
+    environment: *authentik-env
+    volumes:
+      - authentik-media:/media
+      - authentik-templates:/templates
+      - authentik-certs:/certs
+      - ./blueprints:/blueprints/homelab:ro
+    depends_on:
+      authentik-postgresql:
+        condition: service_healthy
+      authentik-redis:
+        condition: service_healthy
+    networks:
+      - authentik-internal
+
+volumes:
+  authentik-database:
+  authentik-redis:
+  authentik-media:
+  authentik-templates:
+  authentik-certs:
+
+networks:
+  proxy:
+    external: true
+  authentik-internal:
+    driver: bridge
+    internal: true
