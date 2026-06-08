@@ -44,6 +44,10 @@ model Server {
   // Top processes by CPU at the last tick — JSON of
   // [{pid, name, cpuPercent, memBytes}]. Latest snapshot only; not historised.
   topProcesses        String?
+  // Proxmox cluster status as seen by this node — JSON of
+  // {name, quorate, nodes:[{name,online,local}], expectedVotes, totalVotes,
+  // quorumNeeded, qdevice}. NULL on standalone / non-Proxmox hosts.
+  clusterInfo         String?
   // Age (hours) of the newest local backup the agent found (e.g. newest
   // vzdump in /tank/backups/dump). Only the host that owns the backups
   // reports it; drives the backup-stale alert. NULL on hosts without backups.

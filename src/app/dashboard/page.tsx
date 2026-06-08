@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, Boxes, Cpu, HardDrive, MemoryStick, Server as ServerIcon, Zap } from "lucide-react";
+import { Activity, AlertTriangle, Boxes, Cpu, HardDrive, MemoryStick, Network, Server as ServerIcon, Zap } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
 import { StatCard, ProgressBar } from "@/components/stat-card";
@@ -6,6 +6,16 @@ import { StatusBadge } from "@/components/status-badge";
 import { formatPercent, formatRelativeTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+
+type ClusterInfo = {
+  name: string;
+  quorate: boolean;
+  nodes: { name: string; online: boolean; local: boolean }[];
+  expectedVotes?: number;
+  totalVotes?: number;
+  quorumNeeded?: number;
+  qdevice?: boolean;
+};
 
 async function getDashboardData() {
   const [servers, containers, alerts] = await Promise.all([
@@ -36,6 +46,20 @@ async function getDashboardData() {
 
   const running = containers.filter((c) => c.status === "running").length;
 
+  // Cluster status: take the freshest non-null clusterInfo any node reported
+  // (all members report the same view). null = no Proxmox cluster.
+  let cluster: ClusterInfo | null = null;
+  const clustered = servers
+    .filter((s) => s.clusterInfo)
+    .sort((a, b) => (b.lastSeenAt?.getTime() ?? 0) - (a.lastSeenAt?.getTime() ?? 0));
+  if (clustered[0]?.clusterInfo) {
+    try {
+      cluster = JSON.parse(clustered[0].clusterInfo) as ClusterInfo;
+    } catch {
+      cluster = null;
+    }
+  }
+
   // Fleet-wide power draw: sum the latest per-server snapshot (RAPL on hosts
   // that expose it). null when no host reports power at all.
   const powerServers = servers.filter((s) => s.powerWatts != null);
@@ -50,6 +74,7 @@ async function getDashboardData() {
     containers: { total: containers.length, running },
     power: { totalWatts, hosts: powerServers.length },
     alerts,
+    cluster,
   };
 }
 
@@ -89,6 +114,8 @@ export default async function DashboardPage() {
         <StatCard label="Power" value={powerValue} icon={Zap} hint={powerHint} />
       </div>
 
+      {data.cluster ? <ClusterPanel cluster={data.cluster} /> : null}
+
       <div className="mt-6 rounded-xl border border-border bg-card p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Recent alerts</h2>
@@ -115,6 +142,88 @@ export default async function DashboardPage() {
         )}
       </div>
     </>
+  );
+}
+
+function ClusterPanel({ cluster }: { cluster: ClusterInfo }) {
+  const online = cluster.nodes.filter((n) => n.online).length;
+  // 2-node cluster without a QDevice: if one node drops, the survivor loses
+  // quorum and /etc/pve goes read-only. Surface that as the headline risk.
+  const twoNodeNoQdevice = cluster.nodes.length === 2 && !cluster.qdevice;
+
+  return (
+    <div className="mt-6 rounded-xl border border-border bg-card p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Network className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold">Cluster</h2>
+          <span className="rounded bg-primary/15 px-1.5 py-0.5 font-mono text-[11px] text-primary">
+            {cluster.name}
+          </span>
+        </div>
+        <span
+          className={`rounded px-2 py-0.5 text-xs font-medium ${
+            cluster.quorate
+              ? "bg-success/15 text-success"
+              : "bg-destructive/15 text-destructive"
+          }`}
+        >
+          {cluster.quorate ? "Quorate" : "No quorum"}
+        </span>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          {cluster.nodes.map((n) => (
+            <div key={n.name} className="flex items-center gap-2 text-sm">
+              <span
+                className={`h-2 w-2 shrink-0 rounded-full ${
+                  n.online ? "bg-success" : "bg-destructive"
+                }`}
+                title={n.online ? "online" : "offline"}
+              />
+              <span className="font-medium">{n.name}</span>
+              {n.local ? (
+                <span className="text-[11px] text-muted-foreground">(this node)</span>
+              ) : null}
+              <span className="ml-auto text-xs text-muted-foreground">
+                {n.online ? "online" : "offline"}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-1.5 text-sm sm:border-l sm:border-border sm:pl-4">
+          <Row label="Nodes online" value={`${online} / ${cluster.nodes.length}`} />
+          {cluster.totalVotes != null ? (
+            <Row
+              label="Votes"
+              value={`${cluster.totalVotes}${cluster.expectedVotes != null ? ` / ${cluster.expectedVotes}` : ""}${
+                cluster.quorumNeeded != null ? ` · quorum ≥ ${cluster.quorumNeeded}` : ""
+              }`}
+            />
+          ) : null}
+          <Row label="QDevice" value={cluster.qdevice ? "present" : "none"} />
+        </div>
+      </div>
+
+      {twoNodeNoQdevice ? (
+        <p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+          2-node cluster zonder QDevice: valt één node weg, dan verliest de
+          overlever quorum (/etc/pve read-only). Voeg een QDevice toe als derde
+          stem — zie deploy/fase-9-ha.md.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="tabular-nums">{value}</span>
+    </div>
   );
 }
 

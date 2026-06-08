@@ -94,6 +94,7 @@ export async function POST(request: Request) {
         ...(d.networkRates ? { networkRates: JSON.stringify(d.networkRates) } : {}),
         ...(d.diskIoRates ? { diskIoRates: JSON.stringify(d.diskIoRates) } : {}),
         ...(d.topProcesses ? { topProcesses: JSON.stringify(d.topProcesses) } : {}),
+        ...(d.cluster ? { clusterInfo: JSON.stringify(d.cluster) } : {}),
         ...(d.backupAgeHours != null ? { backupAgeHours: d.backupAgeHours } : {}),
         ...(d.backupBytes != null && backupSettled ? { backupBytes: d.backupBytes } : {}),
         ...(d.powerWatts != null ? { powerWatts: d.powerWatts } : {}),

@@ -137,6 +137,22 @@ export const upsSchema = z.object({
   inputVoltage: z.number().min(0).optional(),
 });
 
+export const clusterNodeSchema = z.object({
+  name: z.string().min(1).max(255),
+  online: z.boolean(),
+  local: z.boolean(),
+});
+
+export const clusterSchema = z.object({
+  name: z.string().min(1).max(255),
+  quorate: z.boolean(),
+  nodes: z.array(clusterNodeSchema).max(64),
+  expectedVotes: z.number().int().min(0).optional(),
+  totalVotes: z.number().int().min(0).optional(),
+  quorumNeeded: z.number().int().min(0).optional(),
+  qdevice: z.boolean().optional(),
+});
+
 // Combined per-tick payload — the agent sends everything in one POST to
 // /api/agent/report instead of five separate calls. Every section beyond the
 // three core gauges is optional, so a partial collection (one collector
@@ -162,6 +178,7 @@ export const reportSchema = z.object({
   zfsPools: z.array(zfsPoolInputSchema).max(64).optional(),
   smartDevices: z.array(smartDeviceSchema).max(64).optional(),
   ups: upsSchema.optional(),
+  cluster: clusterSchema.optional(),
 });
 
 export type ContainerInput = z.infer<typeof containerInputSchema>;
