@@ -46,7 +46,23 @@ bash deploy/services/authentik/configure-sso.sh   # providers + apps
 3. **Change that password** (top-right → Settings) — it was machine-generated.
 4. **Create your own user** (Admin → Directory → Users) and add it to the
    *authentik Admins* group, then use that day to day.
-5. **Enrol TOTP/passkey** (Settings → MFA Devices) so SSO itself is 2FA-protected.
+5. **Enrol TOTP** — this is now **enforced**: the default authentication flow
+   forces every user without a 2FA device through TOTP setup at login. So your
+   very first akadmin login shows a QR code → scan it with an authenticator app
+   (Aegis / Google Authenticator / Bitwarden / 1Password) → enter the 6-digit
+   code. From then on every authentik login *and* every forward-auth app
+   requires the code.
+
+> **MFA enforcement** lives in `configure-sso.sh` (sets the
+> `default-authentication-mfa-validation` stage's `not_configured_action` to
+> `configure` + the TOTP setup stage). To **undo** it (back to optional MFA):
+> ```sh
+> pct exec 101 -- docker exec -i authentik-worker ak shell -c \
+>   "from authentik.stages.authenticator_validate.models import AuthenticatorValidateStage as A, NotConfiguredAction as N; s=A.objects.get(name='default-authentication-mfa-validation'); s.not_configured_action=N.SKIP; s.save()"
+> ```
+> Lost your TOTP and locked out? The same `ak shell` can remove a user's device
+> or temporarily set the action to SKIP — API tokens (the bootstrap token) keep
+> working regardless of the interactive MFA flow.
 
 The static API token `authentik-bootstrap-token` is what `configure-sso.sh` uses.
 You may rotate/revoke it after setup; just update `AUTHENTIK_BOOTSTRAP_TOKEN` in
