@@ -29,7 +29,7 @@ services:
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.homepage.rule=Host(`home.lan`)"
       - "traefik.http.routers.homepage.entrypoints=web"
-      - "traefik.http.routers.homepage.middlewares=security-headers@file"
+      - "traefik.http.routers.homepage.middlewares=security-headers@file,authentik@file"
       - "traefik.http.services.homepage.loadbalancer.server.port=3000"
 
 networks:

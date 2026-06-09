@@ -118,7 +118,7 @@ services:
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.jellyseerr.rule=Host(`requests.lan`)"
       - "traefik.http.routers.jellyseerr.entrypoints=web"
-      - "traefik.http.routers.jellyseerr.middlewares=security-headers@file"
+      - "traefik.http.routers.jellyseerr.middlewares=security-headers@file,authentik@file"
       - "traefik.http.services.jellyseerr.loadbalancer.server.port=5055"
 
 volumes:

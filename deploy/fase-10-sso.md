@@ -56,14 +56,24 @@ You may rotate/revoke it after setup; just update `AUTHENTIK_BOOTSTRAP_TOKEN` in
 
 ## Forward-auth — already live
 
-These hosts now 302-redirect to authentik and require a login (verified):
+These hosts now 302-redirect to authentik and require a login:
 
 `tools.lan` · `logs.lan` · `pdf.lan` · `search.lan` · `speed.lan` ·
 `dockge.lan` · `prowlarr.lan` · `sonarr.lan` · `radarr.lan` · `bazarr.lan` ·
-`qb.lan`
+`qb.lan` · `requests.lan` (Jellyseerr) · `uptime.lan` · `home.lan` (Homepage)
 
-Not gated (own auth / user-facing): `requests.lan` (Jellyseerr → Jellyfin),
-and the OIDC apps below.
+**Deliberately NOT forward-auth'd** (would break non-browser clients — these use
+native OIDC or keep their own auth):
+
+| App | Why not forward-auth | SSO instead |
+|-----|----------------------|-------------|
+| Jellyfin, Immich | phone/TV apps can't follow the redirect | native OIDC |
+| Nextcloud | WebDAV/CalDAV/desktop sync | native OIDC |
+| Forgejo | `git` over https | native OIDC |
+| Paperless | mobile/API | native OIDC |
+| n8n | inbound webhooks | own auth (gating breaks hooks) |
+| Navidrome, Kavita | Subsonic / e-reader apps | own auth / optional OIDC |
+| **Vaultwarden** | Bitwarden clients + it's the vault | **own strong login + 2FA, never gated** |
 
 **Inter-app traffic is unaffected:** Sonarr→qBittorrent, Prowlarr→Sonarr/Radarr
 etc. talk over the internal `proxy` network by container name, not via the
@@ -106,18 +116,21 @@ Site Administration → Identity & Access → Authentication Sources → Add Sou
   Auto-Discover URL = the discovery URL above.
 - Adds a "Sign in with authentik" button. Existing local logins keep working.
 
-### Paperless-ngx (`paperless.lan`) — compose env, then restart
-Add to `deploy/services/paperless/docker-compose.yml` env and recreate:
-```yaml
-PAPERLESS_URL: "http://paperless.lan"
-PAPERLESS_APPS: "allauth.socialaccount.providers.openid_connect"
-PAPERLESS_SOCIALACCOUNT_PROVIDERS: >-
-  {"openid_connect":{"APPS":[{"provider_id":"authentik","name":"authentik",
-  "client_id":"paperless","secret":"${AUTHENTIK_PAPERLESS_CLIENT_SECRET}",
-  "settings":{"server_url":"http://auth.lan/application/o/paperless/.well-known/openid-configuration"}}]}}
+### Paperless-ngx (`paperless.lan`) — DONE (compose env)
+The OIDC env (`PAPERLESS_APPS`, `PAPERLESS_SOCIALACCOUNT_PROVIDERS`,
+`PAPERLESS_SOCIAL_AUTO_SIGNUP`) is in `deploy/services/paperless/docker-compose.yml`.
+The login page gains an authentik option; local admin login still works.
+
+### Forgejo + Nextcloud — scripted
+Run once (idempotent), after the containers are up:
+```bash
+bash deploy/services/authentik/configure-oidc-apps.sh
 ```
-Login page gains an authentik option. First SSO user must be linked to an admin
-(or set `PAPERLESS_SOCIAL_AUTO_SIGNUP`).
+- Forgejo: adds an "authentik" OAuth2 auth source (needs the source name to be
+  `authentik` so the callback matches).
+- Nextcloud: installs the `user_oidc` app and registers the authentik provider.
+Both are additive. If a command's syntax differs on your image version, the
+script prints which step to do by hand.
 
 ### Immich (`immich.lan`) — admin UI, additive
 Administration → Settings → **OAuth**:

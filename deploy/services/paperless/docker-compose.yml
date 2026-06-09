@@ -35,6 +35,12 @@ services:
       PAPERLESS_SECRET_KEY: "${PAPERLESS_SECRET_KEY}"
       PAPERLESS_ADMIN_USER: "${PAPERLESS_ADMIN_USER:-mike}"
       PAPERLESS_ADMIN_PASSWORD: "${PAPERLESS_ADMIN_PASSWORD}"
+      # --- SSO via authentik (OIDC). Additive: the local admin login still works.
+      # New authentik users are auto-provisioned (non-staff) on first SSO login.
+      PAPERLESS_APPS: "allauth.socialaccount.providers.openid_connect"
+      PAPERLESS_SOCIAL_AUTO_SIGNUP: "true"
+      PAPERLESS_SOCIALACCOUNT_PROVIDERS: >-
+        {"openid_connect":{"APPS":[{"provider_id":"authentik","name":"authentik","client_id":"paperless","secret":"${AUTHENTIK_PAPERLESS_CLIENT_SECRET}","settings":{"server_url":"http://auth.lan/application/o/paperless/.well-known/openid-configuration"}}]}}
     volumes:
       - paperless-data:/usr/src/paperless/data
       - paperless-media:/usr/src/paperless/media
