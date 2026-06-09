@@ -125,5 +125,21 @@ for slug, name, secret_env, redirects in OIDC:
         slug=slug, defaults=dict(name=name, provider=prov))
     print("OIDC %s ok (issuer=http://auth.lan/application/o/%s/)" % (slug, slug))
 
+# --- harden: enforce MFA (TOTP) for everyone -------------------------------
+# Make the default authentication flow's Authenticator Validation stage force
+# enrolment: users with no 2FA device are sent through TOTP setup at login, and
+# anyone with a device must present it. Reversible (set action back to "skip").
+from authentik.stages.authenticator_validate.models import (
+    AuthenticatorValidateStage, NotConfiguredAction,
+)
+from authentik.stages.authenticator_totp.models import AuthenticatorTOTPStage
+mfa = AuthenticatorValidateStage.objects.get(name="default-authentication-mfa-validation")
+totp_setup = AuthenticatorTOTPStage.objects.get(name="default-authenticator-totp-setup")
+mfa.not_configured_action = NotConfiguredAction.CONFIGURE
+mfa.save()
+mfa.configuration_stages.set([totp_setup])
+print("MFA enforced (TOTP): action=%s, setup=%s"
+      % (mfa.not_configured_action, [s.name for s in mfa.configuration_stages.all()]))
+
 print("DONE")
 PY
