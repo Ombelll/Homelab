@@ -109,6 +109,33 @@ rclone config update hetzner nextcloud_chunk_size 32M
 fine. (A single 150M PUT also worked, so the server limit is a few-hundred MB;
 32M chunks stay safely under it. Go smaller — `16M` — only if 413 ever returns.)
 
+## Node 2 — off-site the PBS datastore
+
+Node 1's job above only covers node-1 vzdumps. **CT110 (node 2) lives only in
+the PBS datastore** (`/bkp/datastore` on Proxmox-02), which also holds the
+off-box copies of CT100/101 — so off-siting it covers *everything* a second
+time. `deploy/offsite-backup-pbs.sh` does this; it reuses node 1's rclone
+remotes (same DR crypt key) but writes to a separate folder `offsite:pbs-node2`,
+and runs on node 2 at 05:30.
+
+Set it up on **Proxmox-02** (from node 1, over the cluster SSH):
+```sh
+# 1. modern rclone (Nextcloud chunked upload needs >= 1.63)
+ssh proxmox-02 'curl -fsSL https://rclone.org/install.sh | bash'
+# 2. reuse node 1's encrypted remotes (carries the obscured webdav creds + crypt key)
+ssh proxmox-02 'mkdir -p /root/.config/rclone'
+scp /root/.config/rclone/rclone.conf proxmox-02:/root/.config/rclone/rclone.conf
+ssh proxmox-02 'rclone lsd offsite: >/dev/null && echo REMOTE-OK'
+# 3. install the script + a 05:30 cron
+scp /usr/local/bin/offsite-backup-pbs.sh proxmox-02:/usr/local/bin/  # or curl it from git
+ssh proxmox-02 'chmod 700 /usr/local/bin/offsite-backup-pbs.sh; \
+  printf "30 5 * * * root /usr/local/bin/offsite-backup-pbs.sh\n" > /etc/cron.d/offsite-backup-pbs'
+# 4. first run
+ssh proxmox-02 '/usr/local/bin/offsite-backup-pbs.sh; tail -n 5 /var/log/offsite-backup-pbs.log'
+```
+Optionally give node 2 its own healthchecks.io check in
+`/etc/offsite-backup-pbs.env` (`HC_PING_URL=...`), same as node 1.
+
 ## Notes
 - Encryption is client-side (rclone `crypt`); the provider stores only ciphertext with encrypted filenames.
 - 1 TB/month easily holds the ~14-day local retention (~100 GB of vzdumps).
