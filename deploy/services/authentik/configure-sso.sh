@@ -20,7 +20,7 @@ from authentik.crypto.models import CertificateKeyPair
 from authentik.core.models import Application
 from authentik.providers.proxy.models import ProxyProvider, ProxyMode
 from authentik.providers.oauth2.models import (
-    OAuth2Provider, ClientTypes, ScopeMapping, RedirectURI, RedirectURIMatchingMode,
+    OAuth2Provider, ClientType, ScopeMapping, RedirectURI, RedirectURIMatchingMode,
 )
 
 auth_flow = Flow.objects.get(slug="default-provider-authorization-implicit-consent")
@@ -72,16 +72,17 @@ for slug, name, secret_env, redirects in OIDC:
     if not secret:
         print("SKIP %s (%s not set in env)" % (slug, secret_env))
         continue
-    ruris = [RedirectURI(RedirectURIMatchingMode.STRICT, u) for u in redirects]
     prov, _ = OAuth2Provider.objects.update_or_create(
         name=slug,
         defaults=dict(
             authorization_flow=auth_flow, invalidation_flow=inval_flow,
-            client_type=ClientTypes.CONFIDENTIAL,
-            client_id=slug, client_secret=secret,
-            signing_key=signing, redirect_uris=ruris,
+            client_type=ClientType.CONFIDENTIAL,
+            client_id=slug, client_secret=secret, signing_key=signing,
         ),
     )
+    # redirect_uris is a property over the _redirect_uris JSON field.
+    prov.redirect_uris = [RedirectURI(RedirectURIMatchingMode.STRICT, u) for u in redirects]
+    prov.save()
     prov.property_mappings.set(scopes)
     Application.objects.update_or_create(
         slug=slug, defaults=dict(name=name, provider=prov))
