@@ -29,7 +29,7 @@ services:
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.dockge.rule=Host(`dockge.lan`)"
       - "traefik.http.routers.dockge.entrypoints=web"
-      - "traefik.http.routers.dockge.middlewares=security-headers@file"
+      - "traefik.http.routers.dockge.middlewares=security-headers@file,authentik@file"
       - "traefik.http.services.dockge.loadbalancer.server.port=5001"
 
 volumes:

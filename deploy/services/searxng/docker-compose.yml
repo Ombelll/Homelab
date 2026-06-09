@@ -19,7 +19,7 @@ services:
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.searxng.rule=Host(`search.lan`)"
       - "traefik.http.routers.searxng.entrypoints=web"
-      - "traefik.http.routers.searxng.middlewares=security-headers@file"
+      - "traefik.http.routers.searxng.middlewares=security-headers@file,authentik@file"
       - "traefik.http.services.searxng.loadbalancer.server.port=8080"
 
 volumes:

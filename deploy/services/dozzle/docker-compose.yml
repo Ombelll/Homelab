@@ -44,7 +44,7 @@ services:
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.dozzle.rule=Host(`logs.lan`)"
       - "traefik.http.routers.dozzle.entrypoints=web"
-      - "traefik.http.routers.dozzle.middlewares=security-headers@file"
+      - "traefik.http.routers.dozzle.middlewares=security-headers@file,authentik@file"
       - "traefik.http.services.dozzle.loadbalancer.server.port=8080"
 
 networks:

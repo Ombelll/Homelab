@@ -39,7 +39,7 @@ services:
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.prowlarr.rule=Host(`prowlarr.lan`)"
       - "traefik.http.routers.prowlarr.entrypoints=web"
-      - "traefik.http.routers.prowlarr.middlewares=security-headers@file"
+      - "traefik.http.routers.prowlarr.middlewares=security-headers@file,authentik@file"
       - "traefik.http.services.prowlarr.loadbalancer.server.port=9696"
 
   sonarr:
@@ -54,7 +54,7 @@ services:
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.sonarr.rule=Host(`sonarr.lan`)"
       - "traefik.http.routers.sonarr.entrypoints=web"
-      - "traefik.http.routers.sonarr.middlewares=security-headers@file"
+      - "traefik.http.routers.sonarr.middlewares=security-headers@file,authentik@file"
       - "traefik.http.services.sonarr.loadbalancer.server.port=8989"
 
   radarr:
@@ -69,7 +69,7 @@ services:
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.radarr.rule=Host(`radarr.lan`)"
       - "traefik.http.routers.radarr.entrypoints=web"
-      - "traefik.http.routers.radarr.middlewares=security-headers@file"
+      - "traefik.http.routers.radarr.middlewares=security-headers@file,authentik@file"
       - "traefik.http.services.radarr.loadbalancer.server.port=7878"
 
   bazarr:
@@ -84,7 +84,7 @@ services:
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.bazarr.rule=Host(`bazarr.lan`)"
       - "traefik.http.routers.bazarr.entrypoints=web"
-      - "traefik.http.routers.bazarr.middlewares=security-headers@file"
+      - "traefik.http.routers.bazarr.middlewares=security-headers@file,authentik@file"
       - "traefik.http.services.bazarr.loadbalancer.server.port=6767"
 
   qbittorrent:
@@ -102,7 +102,7 @@ services:
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.qbittorrent.rule=Host(`qb.lan`)"
       - "traefik.http.routers.qbittorrent.entrypoints=web"
-      - "traefik.http.routers.qbittorrent.middlewares=security-headers@file"
+      - "traefik.http.routers.qbittorrent.middlewares=security-headers@file,authentik@file"
       - "traefik.http.services.qbittorrent.loadbalancer.server.port=8080"
 
   jellyseerr:
