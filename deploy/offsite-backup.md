@@ -87,6 +87,18 @@ rclone copy offsite:vzdump/vzdump-lxc-101-XXXX.tar.zst /tank/backups/dump/
 pct restore <newid> /tank/backups/dump/vzdump-lxc-101-XXXX.tar.zst
 ```
 
+## Troubleshooting
+
+**`413 Request Entity Too Large` in the log.** The Storage Share (managed
+Nextcloud behind openresty) rejects a single large PUT. Fix = Nextcloud chunked
+upload. The script now passes `--webdav-nextcloud-chunk-size 100M`; you can also
+bake it into the remote so manual `rclone` calls chunk too:
+```sh
+rclone config update hetzner nextcloud_chunk_size 100M
+```
+If 413 persists, the server's limit is below 100M — lower the chunk size (e.g.
+`64M`/`32M`) in both places and re-run.
+
 ## Notes
 - Encryption is client-side (rclone `crypt`); the provider stores only ciphertext with encrypted filenames.
 - 1 TB/month easily holds the ~14-day local retention (~100 GB of vzdumps).
