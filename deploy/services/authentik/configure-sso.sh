@@ -45,24 +45,40 @@ scopes = list(ScopeMapping.objects.filter(
     ]
 ))
 
-# --- forward-auth (domain level) -------------------------------------------
-fwd, created = ProxyProvider.objects.update_or_create(
-    name="homelab-forward-auth",
-    defaults=dict(authorization_flow=auth_flow, invalidation_flow=inval_flow,
-                  mode=ProxyMode.FORWARD_DOMAIN,
-                  external_host="http://auth.lan", cookie_domain="lan"),
-)
-Application.objects.update_or_create(
-    slug="homelab-forward-auth",
-    defaults=dict(name="Homelab (forward-auth)", provider=fwd))
+# --- forward-auth (per-app, forward_single) --------------------------------
+# NOT domain-level: that needs a shared cookie domain, but browsers reject
+# Domain=lan cookies (single-label "TLD"), so the state cookie is dropped and
+# the outpost callback 400s. forward_single sets a host-only cookie per app;
+# one authentik session still SSO's across all of them (just a quick redirect
+# per host). authentik picks the provider by the forwarded Host header, so the
+# single Traefik authentik@file middleware covers every app.
+FORWARD_APPS = [
+    "tools", "logs", "pdf", "search", "speed", "dockge", "prowlarr", "sonarr",
+    "radarr", "bazarr", "qb", "requests", "uptime", "home",
+]
 outpost = Outpost.objects.filter(name__icontains="embedded").first()
-outpost.providers.add(fwd)
+fwd_provs = []
+for slug in FORWARD_APPS:
+    p, _ = ProxyProvider.objects.update_or_create(
+        name="fwd-%s" % slug,
+        defaults=dict(authorization_flow=auth_flow, invalidation_flow=inval_flow,
+                      mode=ProxyMode.FORWARD_SINGLE,
+                      external_host="http://%s.lan" % slug),
+    )
+    Application.objects.update_or_create(
+        slug="fwd-%s" % slug, defaults=dict(name="%s (SSO)" % slug, provider=p))
+    fwd_provs.append(p)
+# Embedded outpost holds exactly these proxy providers (drops the old broken
+# domain-level one). OIDC/OAuth2 providers are not outpost providers.
+outpost.providers.set(fwd_provs)
 cfg = dict(outpost._config)
 cfg["authentik_host"] = "http://auth.lan/"
 cfg["authentik_host_browser"] = "http://auth.lan/"
 outpost._config = cfg
 outpost.save()
-print("FORWARD_AUTH ok (created=%s)" % created)
+Application.objects.filter(slug="homelab-forward-auth").delete()
+ProxyProvider.objects.filter(name="homelab-forward-auth").delete()
+print("FORWARD_AUTH ok (forward_single, %d apps)" % len(fwd_provs))
 
 # --- native OIDC apps ------------------------------------------------------
 # client_id is a readable, non-secret string; the secret comes from .env.
