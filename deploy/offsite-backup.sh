@@ -78,11 +78,11 @@ for set in $SETS; do
   log "starting offsite sync $src -> offsite:$remote"
   # --webdav-nextcloud-chunk-size: the Hetzner Storage Share (managed Nextcloud
   # behind openresty) rejects a single large PUT with HTTP 413. Chunked upload
-  # (Nextcloud's chunking API) splits big vzdumps into <=100M parts. Lower this
-  # if you still see 413 (the server's client_max_body_size is below the chunk).
+  # (Nextcloud's chunking API) splits big vzdumps into parts. The server's limit
+  # is between 32M and 100M — 32M is verified working (100M still 413'd).
   if rclone sync "$src" "offsite:$remote" \
     --transfers 2 --checkers 4 \
-    --webdav-nextcloud-chunk-size 100M \
+    --webdav-nextcloud-chunk-size 32M \
     --log-file "$LOG" --log-level INFO; then
     log "offsite sync OK: $remote"
   else
