@@ -6,8 +6,9 @@
 # future ones), so mirroring it off-site covers the whole homelab in one go.
 #
 # Encryption is client-side: RCLONE_REMOTE points at an rclone `crypt` remote
-# that wraps your cloud remote (Backblaze B2 / S3), so filenames AND contents
-# are encrypted before they leave the house. The crypt password is the DR key —
+# that wraps your off-site remote (Hetzner Storage Box over SFTP here; B2/S3/etc.
+# work too), so filenames AND contents are encrypted before they leave the
+# house. The crypt password is the DR key —
 # without it the off-site copy is useless, so store it somewhere safe
 # (Vaultwarden) and OFF the homelab. See deploy/fase-11-offsite-backup.md.
 #

@@ -7,7 +7,7 @@ datastore to the **cloud, client-side encrypted**, so there's always a copy
 that isn't in the house.
 
 ```
-guests ──vzdump──▶ PBS datastore (/bkp/datastore, node 2) ──rclone crypt──▶ Backblaze B2
+guests ──vzdump──▶ PBS datastore (/bkp/datastore, node 2) ──rclone crypt over SFTP──▶ Hetzner Storage Box (1 TB)
         02:30/03:00 nightly                                  04:30 nightly (encrypted)
 ```
 
@@ -31,14 +31,21 @@ can't restore from a backup whose password only lived on the dead server).
 
 ## Setup (one-time, on node 2 / Proxmox-02)
 
-### 1. Backblaze B2 (≈ $6/TB/month, 10 GB free)
-1. Create a Backblaze account → **B2 Cloud Storage**.
-2. Create a **private** bucket, e.g. `homelab-pbs-<random>`.
-3. Create an **Application Key** scoped to that bucket; note the **keyID** and
-   **applicationKey** (shown once).
+### 1. Hetzner Storage Box (1 TB)
+In the Hetzner console (Robot → Storage Box), on your box:
+1. **Enable SSH support** (checkbox under "Settings" — needed for SFTP/rsync).
+2. Note the **username** (`uXXXXXX`) and **hostname** (`uXXXXXX.your-storagebox.de`).
+   SFTP/SSH is on **port 23**.
+3. Auth: either set a password, or (recommended) upload an SSH public key.
+   Generate one on node 2 and install it on the box:
+   ```bash
+   ssh-keygen -t ed25519 -f /root/.ssh/hetzner_storagebox -N ""
+   # Hetzner: upload /root/.ssh/hetzner_storagebox.pub via the console, OR:
+   cat /root/.ssh/hetzner_storagebox.pub | ssh -p23 uXXXXXX@uXXXXXX.your-storagebox.de install-ssh-key
+   ```
 
-(Any rclone backend works — S3, Storj, a friend's Minio, a remote PBS box.
-Swap the `b2` remote below for your provider; the crypt layer stays the same.)
+(The sync script is backend-agnostic — any rclone remote works. We use Hetzner
+over SFTP here; the crypt layer below is identical for any target.)
 
 ### 2. Install + configure rclone on node 2
 ```bash
@@ -47,31 +54,34 @@ rclone config
 ```
 Create **two** remotes:
 
-**a) the cloud remote** (`offsite-b2`):
+**a) the Storage Box over SFTP** (`offsite-hetzner`):
 ```
 n) New remote
-name> offsite-b2
-Storage> b2
-account> <keyID>
-key> <applicationKey>
+name> offsite-hetzner
+Storage> sftp
+host> uXXXXXX.your-storagebox.de
+user> uXXXXXX
+port> 23
+key_file> /root/.ssh/hetzner_storagebox      # (or set a password instead)
 (accept defaults for the rest)
 ```
 
-**b) the encryption wrapper** (`offsite-crypt`) pointing at the bucket:
+**b) the encryption wrapper** (`offsite-crypt`) pointing at a folder on the box:
 ```
 n) New remote
 name> offsite-crypt
 Storage> crypt
-remote> offsite-b2:homelab-pbs-<random>/datastore
+remote> offsite-hetzner:pbs-datastore
 filename_encryption> standard
 directory_name_encryption> true
 password> <generate a strong one — THIS IS THE DR KEY>
 password2> <generate a second (salt) — also save it>
 ```
 > Save BOTH crypt passwords in Vaultwarden + off-site. Losing them = losing the
-> backup. The B2 keyID/appKey are NOT enough to decrypt.
+> backup. SSH access to the Storage Box is NOT enough to decrypt.
 
-Quick check: `rclone lsd offsite-crypt:` should connect without error.
+Quick check: `rclone lsd offsite-crypt:` should connect without error
+(first connect: accept the Storage Box host key).
 
 ### 3. Optional tuning — `/etc/pbs-offsite.env`
 ```bash
@@ -114,6 +124,7 @@ ping) so a silently-failing sync gets noticed. The dashboard's backup-freshness
 alerting only watches local backups today.
 
 ## Cost / sizing
-Current datastore is small (hundreds of MB–few GB). At B2 pricing that's cents/
-month; even a few hundred GB of photos (Immich) is a few €/month. Set
-`RCLONE_BWLIMIT` if the first full upload would saturate your uplink.
+Fixed-price 1 TB Storage Box — no per-GB or egress fees, so the only limit is
+the 1 TB. Current datastore is tiny (hundreds of MB–few GB); even the full
+Immich library should fit comfortably. Set `RCLONE_BWLIMIT` (e.g. `20M`) if the
+first full upload would saturate your uplink.
