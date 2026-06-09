@@ -12,7 +12,17 @@
 #   bash deploy/services/authentik/configure-sso.sh
 set -euo pipefail
 
-docker exec -i authentik-worker ak shell <<'PY'
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+ENV_FILE="${ENV_FILE:-$REPO_ROOT/.env}"
+# shellcheck disable=SC1090
+set -a; . "$ENV_FILE"; set +a
+
+docker exec -i \
+  -e AUTHENTIK_IMMICH_CLIENT_SECRET="${AUTHENTIK_IMMICH_CLIENT_SECRET:-}" \
+  -e AUTHENTIK_NEXTCLOUD_CLIENT_SECRET="${AUTHENTIK_NEXTCLOUD_CLIENT_SECRET:-}" \
+  -e AUTHENTIK_FORGEJO_CLIENT_SECRET="${AUTHENTIK_FORGEJO_CLIENT_SECRET:-}" \
+  -e AUTHENTIK_PAPERLESS_CLIENT_SECRET="${AUTHENTIK_PAPERLESS_CLIENT_SECRET:-}" \
+  authentik-worker ak shell <<'PY'
 import os
 from authentik.flows.models import Flow
 from authentik.outposts.models import Outpost
