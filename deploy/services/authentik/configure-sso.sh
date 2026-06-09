@@ -65,6 +65,17 @@ for slug in FORWARD_APPS:
                       mode=ProxyMode.FORWARD_SINGLE,
                       external_host="http://%s.lan" % slug),
     )
+    # The ORM doesn't auto-populate the allowed redirect_uri the way the UI/API
+    # serializer does, so authentik rejects the callback ("Redirect URI Error").
+    # set_oauth_defaults() computes it from mode+external_host; fall back to the
+    # known proxy callback if that helper is absent in this version.
+    try:
+        p.set_oauth_defaults()
+    except Exception:
+        p.redirect_uris = [RedirectURI(
+            RedirectURIMatchingMode.STRICT,
+            "http://%s.lan/outpost.goauthentik.io/callback" % slug)]
+    p.save()
     Application.objects.update_or_create(
         slug="fwd-%s" % slug, defaults=dict(name="%s (SSO)" % slug, provider=p))
     fwd_provs.append(p)
