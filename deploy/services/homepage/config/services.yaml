@@ -22,6 +22,10 @@
         href: http://dockge.lan
         description: Docker-compose stack manager
         icon: dockge
+    - authentik (SSO):
+        href: http://auth.lan
+        description: Single sign-on / identity provider
+        icon: authentik
 
 - Media:
     - Jellyfin:

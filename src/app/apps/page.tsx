@@ -17,6 +17,7 @@ const GROUPS: { title: string; items: App[] }[] = [
       { name: "AdGuard Home", url: "http://adguard.lan", desc: "Netwerk-DNS + ad-blocking" },
       { name: "Homepage", url: "http://home.lan", desc: "Start-/linkpagina" },
       { name: "Dockge", url: "http://dockge.lan", desc: "Docker-compose stack-manager" },
+      { name: "authentik (SSO)", url: "http://auth.lan", desc: "Single sign-on / identity provider" },
     ],
   },
   {
