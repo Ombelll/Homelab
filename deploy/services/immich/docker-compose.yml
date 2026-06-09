@@ -16,6 +16,10 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    # Resolve authentik's OIDC discovery URL (back-channel) — container DNS
+    # doesn't know *.lan; 192.168.1.21 is CT101/Traefik.
+    extra_hosts:
+      - "auth.lan:192.168.1.21"
     volumes:
       # Photo/video library on the `tank` ZFS pool (224 GB) instead of the
       # 32 GB LXC rootfs. Backed by the CT 101 bind mountpoint mp0 ->

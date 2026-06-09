@@ -21,6 +21,10 @@ services:
     image: ghcr.io/paperless-ngx/paperless-ngx:latest
     container_name: paperless
     restart: unless-stopped
+    # Resolve authentik's OIDC discovery URL (back-channel) — container DNS
+    # doesn't know *.lan; 192.168.1.21 is CT101/Traefik.
+    extra_hosts:
+      - "auth.lan:192.168.1.21"
     depends_on:
       - paperless-redis
     environment:

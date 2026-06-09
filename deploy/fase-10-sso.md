@@ -108,6 +108,11 @@ just needs its side wired up. All use, per app slug `<s>` ∈
 > OIDC runs over plain HTTP on the LAN here. All four apps below accept that;
 > if one ever refuses, front it with Tailscale Serve / HTTPS like the dashboard.
 
+> **Back-channel DNS:** the app containers' DNS doesn't know `*.lan`, so the
+> OIDC discovery/token calls to `auth.lan` fail by default. Each OIDC app
+> compose therefore has `extra_hosts: ["auth.lan:192.168.1.21"]` (CT101/Traefik).
+> Recreate the app after adding it, or discovery 500s with "no such host".
+
 ### Forgejo (`git.lan`) — additive, safest
 Site Administration → Identity & Access → Authentication Sources → Add Source:
 - Type **OAuth2**, Provider **OpenID Connect**, Name **authentik**

@@ -14,6 +14,10 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    # Resolve authentik's OIDC discovery URL (back-channel) — container DNS
+    # doesn't know *.lan; 192.168.1.21 is CT101/Traefik.
+    extra_hosts:
+      - "auth.lan:192.168.1.21"
     volumes:
       - /mnt/nextcloud:/var/www/html       # app + data on tank
       - /etc/localtime:/etc/localtime:ro

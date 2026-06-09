@@ -16,6 +16,10 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    # Resolve authentik's OIDC discovery URL (back-channel) — the container's
+    # DNS doesn't know *.lan; 192.168.1.21 is CT101/Traefik.
+    extra_hosts:
+      - "auth.lan:192.168.1.21"
     environment:
       USER_UID: "1000"
       USER_GID: "1000"
