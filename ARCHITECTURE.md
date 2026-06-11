@@ -46,6 +46,24 @@ backups.
 
 *(The Windows PC was decommissioned from monitoring — agent disabled and the server removed via the dashboard's Danger-zone delete.)*
 
+## Network & gateway
+
+The LAN is **192.168.1.0/24**. Internet arrives over 5G:
+
+```
+Odido Klik & Klaar (5G)        LAN 192.168.10.1
+        │  WAN (DHCP)
+GL.iNet GL-MT3000              LAN gateway 192.168.1.1/24, DHCP pool .100–.249
+        │
+   Omada switch                Proxmox-01 (.10) + LXCs (.20/.21/.22), all wired
+```
+
+- **Gateway / DHCP** — the GL-MT3000 is the LAN router at `192.168.1.1`; its WAN port pulls DHCP from the Odido (which serves `192.168.10.x`). The Odido was moved off its default `192.168.1.1` to `192.168.10.1` so its LAN doesn't clash with the homelab subnet.
+- **Static IPs** — every host is static on `192.168.1.0/24` with gateway `192.168.1.1`. Keep DHCP reservations clear of `.10`, `.11`, `.20`, `.21`, `.22`, `.30`.
+- **Host DNS** — Proxmox-01 resolves via `192.168.1.1` → `9.9.9.9` → `1.1.1.1`; Proxmox-02 via `9.9.9.9` → `1.1.1.1`. Network-wide client DNS is AdGuard on `192.168.1.21`.
+
+> **Router swap (2026-06-11)** — replaced the previous router with the GL.iNet GL-MT3000. Only the gateway hardware changed; it kept the old `192.168.1.1` / `…0/24` scheme, so no host or service reconfiguration was needed. Added public-DNS fallbacks (`9.9.9.9`, `1.1.1.1`) to Proxmox-01's resolver.
+
 ## Services (containers on CT 101)
 
 | Service | Purpose | Reached at |
