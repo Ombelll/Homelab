@@ -40,6 +40,11 @@ SyslogIdentifier=homelab-agent
 NoNewPrivileges=true
 ProtectSystem=full
 ProtectHome=true
+# Optional router monitoring (AGENT_ROUTER_SSH) shells out to `ssh`, which needs
+# root's key + known_hosts under /root/.ssh. ProtectHome=true otherwise hides
+# /root, so bind just that one dir back in read-only — nothing else in /root is
+# exposed, and ssh can't write (host key must be pre-pinned in known_hosts).
+BindReadOnlyPaths=/root/.ssh
 PrivateTmp=true
 ProtectControlGroups=true
 ProtectKernelModules=true
