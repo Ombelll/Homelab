@@ -89,6 +89,34 @@ export async function POST(request: Request) {
     where: { deviceId: device.id, ifname: { notIn: radios.map((r) => r.ifname) } },
   });
 
+  // Device inventory: upsert each reported client (firstSeen preserved, lastSeen
+  // bumped), then mark every other known client offline (kept for history).
+  const clients = d.clients ?? [];
+  for (const c of clients) {
+    const fields = {
+      ip: c.ip ?? null,
+      hostname: c.hostname ?? null,
+      online: c.online,
+      band: c.band ?? null,
+      radioIf: c.radioIf ?? null,
+      signalDbm: c.signalDbm ?? null,
+      rxRateMbps: c.rxRateMbps ?? null,
+      txRateMbps: c.txRateMbps ?? null,
+      lastSeen: now,
+    };
+    await prisma.networkClient.upsert({
+      where: { deviceId_mac: { deviceId: device.id, mac: c.mac } },
+      update: fields,
+      create: { deviceId: device.id, mac: c.mac, firstSeen: now, ...fields },
+    });
+  }
+  if (clients.length) {
+    await prisma.networkClient.updateMany({
+      where: { deviceId: device.id, mac: { notIn: clients.map((c) => c.mac) }, online: true },
+      data: { online: false },
+    });
+  }
+
   await reconcileAlert(
     "router-temp-high",
     d.host,

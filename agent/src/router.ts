@@ -15,6 +15,18 @@ export type RouterRadio = {
   clientCount: number;
 };
 
+export type RouterClient = {
+  mac: string; // lower-case
+  ip?: string;
+  hostname?: string;
+  online: boolean;
+  band?: string; // wifi band when associated
+  radioIf?: string;
+  signalDbm?: number;
+  rxRateMbps?: number;
+  txRateMbps?: number;
+};
+
 export type RouterStats = {
   host: string; // IP/hostname (user@ stripped) — the device key
   name: string; // model string, e.g. "GL.iNet GL-MT3000"
@@ -31,6 +43,7 @@ export type RouterStats = {
   clientCount?: number;
   leaseCount?: number;
   radios?: RouterRadio[];
+  clients?: RouterClient[];
 };
 
 // One-shot readout run on the router. Pure /proc + sysfs + uci/ip — no JSON
@@ -53,9 +66,12 @@ const REMOTE = [
   'echo "wan_tx=$(cat /sys/class/net/$WANDEV/statistics/tx_bytes 2>/dev/null)"',
   'echo "clients=$(awk \'NR>1 && $3=="0x2"\' /proc/net/arp 2>/dev/null | wc -l)"',
   'echo "leases=$(wc -l < /tmp/dhcp.leases 2>/dev/null)"',
+  // Device inventory: DHCP leases (mac|ip|hostname) + reachable ARP (mac|ip).
+  'awk \'{print "LEASE|" $2 "|" $3 "|" $4}\' /tmp/dhcp.leases 2>/dev/null',
+  'awk \'NR>1 && $3=="0x2" {print "ARP|" $4 "|" $1}\' /proc/net/arp 2>/dev/null',
   // Per-radio wifi: discover interfaces from `iwinfo` (driver-agnostic — the
   // MTK driver doesn't populate /sys .../wireless), keep only AP (Master) VIFs,
-  // emit one pipe-delimited RADIO line each. Band is derived from frequency.
+  // emit one RADIO line + one WIFI line per associated station.
   'for r in $(iwinfo 2>/dev/null | sed -n "s/^\\([a-zA-Z0-9._-]*\\)[[:space:]]*ESSID:.*/\\1/p"); do ' +
     'info=$(iwinfo "$r" info 2>/dev/null); echo "$info" | grep -q "Mode: Master" || continue; ' +
     'ssid=$(echo "$info" | sed -n \'s/.*ESSID: "\\(.*\\)".*/\\1/p\'); ' +
@@ -66,6 +82,12 @@ const REMOTE = [
     'rate=$(echo "$info" | sed -n \'s/.*Bit Rate: \\([0-9.]*\\).*/\\1/p\'); ' +
     'clients=$(iwinfo "$r" assoclist 2>/dev/null | grep -cE "^[0-9A-Fa-f]{2}:"); ' +
     'echo "RADIO|$r|$ssid|$ch|$freq|$width|$txp|$rate|$clients"; ' +
+    // One WIFI line per station: MAC, signal, RX rate, TX rate (band from freq).
+    'iwinfo "$r" assoclist 2>/dev/null | awk -v rf="$r" -v fr="$freq" ' +
+      '\'function band(f){return (f+0)>=5?"5 GHz":"2.4 GHz"} ' +
+      '/^[0-9A-Fa-f][0-9A-Fa-f]:/{mac=$1;sig=$2} ' +
+      '$1=="RX:"{rx=$2} ' +
+      '$1=="TX:"{tx=$2;print "WIFI|" mac "|" band(fr) "|" rf "|" sig "|" rx "|" tx}\'; ' +
   'done',
 ].join("; ");
 
@@ -180,6 +202,40 @@ export async function getRouterStats(): Promise<RouterStats | null> {
     });
   }
   if (radios.length) stats.radios = radios;
+
+  // Device inventory: merge DHCP leases + reachable ARP + wifi assoc by MAC.
+  const byMac = new Map<string, RouterClient>();
+  const get = (macRaw: string): RouterClient => {
+    const mac = macRaw.trim().toLowerCase();
+    let c = byMac.get(mac);
+    if (!c) {
+      c = { mac, online: false };
+      byMac.set(mac, c);
+    }
+    return c;
+  };
+  for (const line of stdout.split("\n")) {
+    const p = line.split("|");
+    if (p[0] === "LEASE" && p.length >= 4) {
+      const c = get(p[1]);
+      if (p[2]) c.ip = p[2];
+      if (p[3] && p[3] !== "*") c.hostname = p[3];
+    } else if (p[0] === "ARP" && p.length >= 3) {
+      const c = get(p[1]);
+      if (p[2]) c.ip = c.ip ?? p[2];
+      c.online = true; // in the reachable ARP table right now
+    } else if (p[0] === "WIFI" && p.length >= 7) {
+      // WIFI|mac|band|radioIf|signal|rxRate|txRate
+      const c = get(p[1]);
+      c.online = true; // associated == online
+      c.band = p[2] || undefined;
+      c.radioIf = p[3] || undefined;
+      c.signalDbm = num(p[4]);
+      c.rxRateMbps = num(p[5]);
+      c.txRateMbps = num(p[6]);
+    }
+  }
+  if (byMac.size) stats.clients = Array.from(byMac.values()).slice(0, 128);
 
   return stats;
 }

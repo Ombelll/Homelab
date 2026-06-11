@@ -144,6 +144,17 @@ export const api = {
       maxRateMbps?: number;
       clientCount: number;
     }>;
+    clients?: Array<{
+      mac: string;
+      ip?: string;
+      hostname?: string;
+      online: boolean;
+      band?: string;
+      radioIf?: string;
+      signalDbm?: number;
+      rxRateMbps?: number;
+      txRateMbps?: number;
+    }>;
   }) => post("/api/agent/router", payload),
 
   // Shipped warn/error log lines (host journal + container logs).

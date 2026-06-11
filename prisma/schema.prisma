@@ -635,6 +635,31 @@ model NetworkDevice {
   ports   NetworkPort[]
   samples NetworkDeviceSample[]
   radios  NetworkRadio[]
+  clients NetworkClient[]
+}
+
+// A device seen on a router's LAN/wifi (kind="router"), merged by the agent from
+// DHCP leases + ARP + wifi assoclist. `online` reflects the last poll; rows for
+// devices that drop off are kept (online=false) for history, pruned by retention.
+model NetworkClient {
+  id         String   @id @default(cuid())
+  deviceId   String
+  mac        String // normalised lower-case
+  ip         String?
+  hostname   String? // DHCP lease hostname, "*"/empty → null
+  online     Boolean  @default(true)
+  band       String? // wifi band if associated (else null = wired/unknown)
+  radioIf    String? // ra0/rax0/... when on wifi
+  signalDbm  Int? // wifi signal
+  rxRateMbps Float? // wifi negotiated RX rate
+  txRateMbps Float? // wifi negotiated TX rate
+  firstSeen  DateTime @default(now())
+  lastSeen   DateTime @default(now())
+
+  device NetworkDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, mac])
+  @@index([deviceId])
 }
 
 // One wifi radio/SSID of a router (kind="router"), parsed from `iwinfo`. The

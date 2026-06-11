@@ -12,6 +12,7 @@ async function getDevices() {
       ports: { orderBy: { ifIndex: "asc" } },
       samples: { orderBy: { at: "desc" }, take: 60 },
       radios: { orderBy: { band: "asc" } },
+      clients: { orderBy: [{ online: "desc" }, { hostname: "asc" }, { mac: "asc" }] },
     },
   });
 }
@@ -170,6 +171,52 @@ AGENT_ROUTER_SSH=root@192.168.1.1  # OpenWrt/GL.iNet router (key-only SSH)`}
                         ))}
                       </tbody>
                     </table>
+                  ) : null}
+                  {dev.clients.length > 0 ? (
+                    <details className="border-t border-border">
+                      <summary className="cursor-pointer px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/20">
+                        {dev.clients.filter((c) => c.online).length} online ·{" "}
+                        {dev.clients.length} known devices
+                      </summary>
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/20 text-xs uppercase tracking-wide text-muted-foreground">
+                          <tr>
+                            <th className="px-4 py-2 text-left font-medium">Device</th>
+                            <th className="px-4 py-2 text-left font-medium">IP</th>
+                            <th className="px-4 py-2 text-left font-medium">Connection</th>
+                            <th className="px-4 py-2 text-right font-medium">Signal</th>
+                            <th className="px-4 py-2 text-right font-medium">Rate ↓/↑</th>
+                            <th className="px-4 py-2 text-right font-medium">Seen</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {dev.clients.map((c) => {
+                            const isNew = Date.now() - new Date(c.firstSeen).getTime() < 86_400_000;
+                            const weak = c.signalDbm != null && c.signalDbm <= -75;
+                            return (
+                              <tr key={c.id} className={c.online ? "hover:bg-muted/20" : "text-muted-foreground hover:bg-muted/20"}>
+                                <td className="px-4 py-2">
+                                  <span className={`mr-1.5 inline-block h-2 w-2 rounded-full align-middle ${c.online ? "bg-success" : "bg-muted-foreground/40"}`} />
+                                  <span className="align-middle">{c.hostname ?? <span className="font-mono text-xs">{c.mac}</span>}</span>
+                                  {isNew ? <span className="ml-2 rounded bg-primary/15 px-1 text-[10px] uppercase text-primary">new</span> : null}
+                                </td>
+                                <td className="px-4 py-2 font-mono text-xs">{c.ip ?? "—"}</td>
+                                <td className="px-4 py-2 text-xs">{c.band ? `wifi ${c.band}` : "—"}</td>
+                                <td className={`px-4 py-2 text-right tabular-nums ${weak ? "text-warning" : "text-muted-foreground"}`}>
+                                  {c.signalDbm != null ? `${c.signalDbm} dBm` : "—"}
+                                </td>
+                                <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                                  {c.rxRateMbps != null ? `${Math.round(c.rxRateMbps)}/${Math.round(c.txRateMbps ?? 0)}` : "—"}
+                                </td>
+                                <td className="px-4 py-2 text-right text-xs text-muted-foreground">
+                                  {c.online ? "now" : formatRelativeTime(c.lastSeen)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </details>
                   ) : null}
                 </div>
               );

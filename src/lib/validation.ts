@@ -241,6 +241,18 @@ export const routerRadioSchema = z.object({
   clientCount: z.number().int().min(0),
 });
 
+export const networkClientSchema = z.object({
+  mac: z.string().min(1).max(32),
+  ip: z.string().max(64).optional(),
+  hostname: z.string().max(128).optional(),
+  online: z.boolean(),
+  band: z.string().max(16).optional(),
+  radioIf: z.string().max(32).optional(),
+  signalDbm: z.number().int().min(-120).max(0).optional(),
+  rxRateMbps: z.number().min(0).max(100000).optional(),
+  txRateMbps: z.number().min(0).max(100000).optional(),
+});
+
 // SSH report from an agent that polled an OpenWrt/GL.iNet router.
 export const routerReportSchema = z.object({
   host: z.string().min(1).max(255),
@@ -258,4 +270,5 @@ export const routerReportSchema = z.object({
   clientCount: z.number().int().min(0).optional(),
   leaseCount: z.number().int().min(0).optional(),
   radios: z.array(routerRadioSchema).max(16).optional(),
+  clients: z.array(networkClientSchema).max(256).optional(),
 });
