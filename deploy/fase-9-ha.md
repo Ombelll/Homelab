@@ -16,24 +16,41 @@ restore CT 100/101 from the `pbs` storage onto node 2 and start them there.
 
 ---
 
-## A. QDevice — the 3rd vote (do this first; needs the router/Pi)
+## A. QDevice — the 3rd vote (do this first)
 
 Without it, a 2-node cluster that loses a node is **not quorate** → `/etc/pve`
-goes read-only and HA can't act. A QDevice is a tiny tie-breaker daemon on an
-always-on box (GL.iNet router, a Pi, anything Debian-ish on the LAN).
+goes read-only and HA can't act. A QDevice is a tiny tie-breaker daemon
+(`corosync-qnetd`) on an always-on box independent of both nodes.
+
+**Node side — DONE 2026-06-11:** `corosync-qdevice` (the client) is installed on
+both Proxmox nodes. Pre-`setup` quorum was Expected/Total = 2/2.
+
+**QDevice host = the GL.iNet GL-MT3000 (192.168.1.1).** It runs **OpenWrt**, not
+Debian — so `apt install corosync-qnetd` does NOT apply. The MT3000 has limited
+flash (~256 MB) + 512 MB RAM and no built-in Docker, so the clean route is the
+**native opkg package** (Docker would need a USB disk):
 
 ```sh
-# On the QDevice host (e.g. 192.168.1.1 router or a Pi):
-apt install -y corosync-qnetd
+# On the router (ssh root@192.168.1.1 — GL.iNet admin password; enable SSH in
+# the GL UI first if needed). aarch64 / MT7981 (cortex-a53).
+# corosync-qnetd + corosync-nss-tools aren't in the stock opkg feeds; use the
+# prebuilt GL.iNet aarch64 .ipk from github.com/jrparks/corosync-qnetd-openwrt:
+opkg update
+opkg install ./corosync-nss-tools_*.ipk ./corosync-qnetd_*.ipk
+/etc/init.d/corosync-qnetd enable && /etc/init.d/corosync-qnetd start
+```
+> Tight on flash? Alternative QDevice hosts: a Raspberry Pi / any always-on
+> Debian box (`apt install corosync-qnetd`), or Docker (modelrockettier/
+> docker-corosync-qnetd) on a box that has Docker. It just has to be a 3rd
+> independent always-on host on the LAN.
 
-# On BOTH Proxmox nodes:
-apt install -y corosync-qdevice
-
-# On ONE node:
-pvecm qdevice setup <qdevice-ip>     # enter the QDevice host's root pw when asked
+```sh
+# Then on ONE Proxmox node (prompts for the ROUTER's root password — Mike types
+# it; the agent never enters credentials):
+pvecm qdevice setup 192.168.1.1
 
 # Verify — expected votes should now be 3, and survive one node down:
-pvecm status        # look for "Qdevice" under Membership, Expected votes: 3
+pvecm status        # "Qdevice" under Membership, Expected votes: 3
 ```
 After this, one node can fail and the survivor (1 node + QDevice = 2/3) stays
 **quorate** → HA can fail guests over.
