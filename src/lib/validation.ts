@@ -211,6 +211,14 @@ export const snmpPortSchema = z.object({
   outDiscards: z.number().int().min(0).optional(),
 });
 
+export const speedtestReportSchema = z.object({
+  downloadMbps: z.number().min(0).max(1_000_000),
+  uploadMbps: z.number().min(0).max(1_000_000),
+  pingMs: z.number().min(0).max(100_000),
+  server: z.string().max(128).optional(),
+  testedAt: z.string().datetime(),
+});
+
 export const logLineSchema = z.object({
   source: z.string().min(1).max(128),
   message: z.string().min(1).max(4000),

@@ -5,6 +5,10 @@ import { formatRelativeTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+async function getSpeedtests() {
+  return prisma.speedtestResult.findMany({ orderBy: { testedAt: "desc" }, take: 30 });
+}
+
 async function getDevices() {
   return prisma.networkDevice.findMany({
     orderBy: { name: "asc" },
@@ -59,7 +63,12 @@ function Stat({ label, value, warn }: { label: string; value: string; warn?: boo
 }
 
 export default async function NetworkPage() {
-  const devices = await getDevices();
+  const [devices, speedtests] = await Promise.all([getDevices(), getSpeedtests()]);
+  const latest = speedtests[0];
+  // Download trend (oldest→newest), normalised for the fixed-axis sparkline.
+  const dlSeries = speedtests.slice().reverse().map((s) => s.downloadMbps);
+  const dlMax = Math.max(1, ...dlSeries);
+  const dlSpark = dlSeries.map((v) => (v / dlMax) * 100);
 
   return (
     <>
@@ -67,6 +76,30 @@ export default async function NetworkPage() {
         title="Network"
         description="Managed switches polled over SNMP and routers polled over SSH by an agent."
       />
+
+      {latest ? (
+        <div className="mb-4 overflow-hidden rounded-xl border border-border bg-card">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/30 px-4 py-2.5 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">Internet</span>
+              <span className="text-xs text-muted-foreground">speed test{latest.server ? ` · ${latest.server}` : ""}</span>
+            </div>
+            <span className="text-xs text-muted-foreground">tested {formatRelativeTime(latest.testedAt)}</span>
+          </div>
+          <dl className="grid grid-cols-3 gap-px bg-border">
+            <Stat label="Download" value={`${Math.round(latest.downloadMbps)} Mbps`} />
+            <Stat label="Upload" value={`${Math.round(latest.uploadMbps)} Mbps`} />
+            <Stat label="Ping" value={`${latest.pingMs} ms`} warn={latest.pingMs >= 150} />
+          </dl>
+          {dlSpark.length >= 2 ? (
+            <div className="flex items-center gap-2 px-4 py-2 text-xs text-muted-foreground">
+              <span>download trend</span>
+              <Sparkline values={dlSpark} width={160} height={22} tone="primary" />
+              <span className="tabular-nums">peak {Math.round(dlMax)} Mbps</span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {devices.length === 0 ? (
         <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground">

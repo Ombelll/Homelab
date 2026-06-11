@@ -26,6 +26,7 @@ import { getTopProcesses } from "./processes.js";
 import { getSmartDevices } from "./smart.js";
 import { getSnmpDevice } from "./snmp.js";
 import { getRouterStats } from "./router.js";
+import { getLatestSpeedtest } from "./speedtest.js";
 import { getUps } from "./ups.js";
 import { getPowerWatts } from "./power.js";
 import { getLogs } from "./logs.js";
@@ -173,10 +174,24 @@ async function main() {
     setInterval(() => safeRun(routerTick, "router"), config.intervalMs);
   }
 
+  // Optional: read the latest internet speed test every 5 minutes (the tracker
+  // runs tests on its own schedule; we just surface the newest). Dormant unless
+  // AGENT_SPEEDTEST_CONTAINER is set.
+  if (config.speedtestContainer) {
+    console.log(`[agent] speedtest reading enabled — container=${config.speedtestContainer}`);
+    await safeRun(speedtestTick, "speedtest");
+    setInterval(() => safeRun(speedtestTick, "speedtest"), 5 * 60 * 1000);
+  }
+
   // Ship warn/error logs (host journal + container logs) every 5 minutes for
   // after-the-fact searching in the dashboard.
   await safeRun(logsTick, "logs");
   setInterval(() => safeRun(logsTick, "logs"), 5 * 60 * 1000);
+}
+
+async function speedtestTick() {
+  const result = await getLatestSpeedtest();
+  if (result) await api.reportSpeedtest(result);
 }
 
 async function snmpTick() {

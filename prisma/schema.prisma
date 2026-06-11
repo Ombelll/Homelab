@@ -690,6 +690,22 @@ model NetworkRadio {
   @@index([deviceId])
 }
 
+// Internet speed test results read by the agent from a speedtest-tracker
+// container's sqlite DB. One row per distinct test (deduped by testedAt).
+// Pruned by retention.
+model SpeedtestResult {
+  id           String   @id @default(cuid())
+  downloadMbps Float
+  uploadMbps   Float
+  pingMs       Float
+  server       String? // e.g. "ookla" or the test server name
+  testedAt     DateTime // created_at from speedtest-tracker
+  at           DateTime @default(now())
+
+  @@unique([testedAt])
+  @@index([testedAt])
+}
+
 // Shipped warn/error log lines from the host journal + container logs, for
 // after-the-fact searching. Agent ships on a slow cadence; pruned by retention.
 model LogEntry {

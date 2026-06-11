@@ -58,4 +58,9 @@ export const config = {
   // the host's existing SSH key (key-only, BatchMode) — no password is stored.
   // Set this only on the ONE host whose key the router trusts (here: node 1).
   routerSshTarget: process.env.AGENT_ROUTER_SSH?.trim() || undefined,
+
+  // Optional: read internet speed-test results from a speedtest-tracker
+  // container's sqlite (via `docker exec <name> php`). DORMANT unless
+  // AGENT_SPEEDTEST_CONTAINER names the container (set on the host that runs it).
+  speedtestContainer: process.env.AGENT_SPEEDTEST_CONTAINER?.trim() || undefined,
 };

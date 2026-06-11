@@ -157,6 +157,15 @@ export const api = {
     }>;
   }) => post("/api/agent/router", payload),
 
+  // Latest internet speed test (read from a speedtest-tracker container).
+  reportSpeedtest: (payload: {
+    downloadMbps: number;
+    uploadMbps: number;
+    pingMs: number;
+    server?: string;
+    testedAt: string;
+  }) => post("/api/agent/speedtest", payload),
+
   // Shipped warn/error log lines (host journal + container logs).
   reportLogs: (payload: {
     hostname: string;

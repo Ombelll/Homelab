@@ -94,7 +94,8 @@ EOF
 # were sourced in step 4 — re-emit any that are set so a code update never wipes
 # SNMP polling / UPS / backup config. (Bug fix: a bare re-run used to drop them.)
 for _var in AGENT_SNMP_TARGET AGENT_SNMP_COMMUNITY AGENT_BACKUP_DIR \
-            AGENT_REQUEST_TIMEOUT_SECONDS AGENT_UPS_NAME AGENT_ROUTER_SSH; do
+            AGENT_REQUEST_TIMEOUT_SECONDS AGENT_UPS_NAME AGENT_ROUTER_SSH \
+            AGENT_SPEEDTEST_CONTAINER; do
   _val="${!_var:-}"
   [ -n "$_val" ] && printf '%s=%s\n' "$_var" "$_val" >> "$ENV_FILE"
 done
