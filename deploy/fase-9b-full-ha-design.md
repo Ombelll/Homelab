@@ -3,6 +3,43 @@
 Goal: a node-1 crash auto-restarts CT100 **and** CT101 (with its data) on node 2.
 Builds on Fase 9 Part A (QDevice — DONE; cluster has 3 votes, quorate).
 
+> ## ✅ EXECUTED & VALIDATED 2026-06-11
+> All steps below are DONE. Both guests run on the cluster ZFS storage `zfs-guests`
+> (pool `tank/guests`, same name on both nodes), replicate to Proxmox-02 every 15
+> min (`pvesr status` → both OK, FailCount 0), and are HA-managed under group
+> `pref-node1` (prefer node 1, auto-failback on).
+>
+> **CT101's 3 bind mounts → managed ZFS subvols** (so they replicate): immich →
+> `subvol-101-disk-1` (100G), media → `-disk-2` (250G), nextcloud → `-disk-3`
+> (50G); rootfs → `-disk-0` (48G). Data copied host-side with `rsync -aHAX`
+> (byte-exact, uid-shift 100000:100000 preserved); old `/tank/{immich,media,
+> nextcloud}` datasets kept as fallback (remove once you're confident).
+>
+> **Gotcha hit:** `pct move-volume` leaves the old copy as `unused0:
+> local-lvm:vm-10X-disk-0`; replication rejects any volume on non-replicatable
+> storage (`missing replicate feature`). Fix: `pct set 10X -delete unused0` (also
+> frees local-lvm) before creating the replication jobs.
+>
+> **Failover test (Step 8) results:**
+> - **Graceful `reboot` of node 1 = FREEZE, not failover** — and that's correct.
+>   `datacenter.cfg` has no `ha:` line, so `shutdown_policy=conditional`: on a
+>   planned reboot HA *freezes* the guests (CRM journal: `started→freeze` then
+>   `freeze→started` ~60s later) and waits for the node to return, instead of
+>   relocating. The win it *did* prove: **the cluster stayed quorate with node 1
+>   down** (node 2 + QDevice = 2/3) and guests resumed cleanly, zero data loss.
+>   So planned node-1 reboots (updates) are safe and DON'T trigger a failover storm.
+> - **True failover proven via controlled relocate:** pinned the group
+>   (`nofailback 1`), `ha-manager crm-command migrate ct:100 Proxmox-02` →
+>   CT100 stopped on node 1, **started on node 2 from its replica in ~20s**,
+>   `pg_isready` = accepting connections on node 2. Migrated back to node 1 (~12s),
+>   restored `nofailback 0`. This is the data path that matters — node 2 boots the
+>   guest from the replicated ZFS volume.
+> - **Unplanned crash** (the watchdog-fence path) was NOT destructively tested;
+>   it's standard Proxmox HA and the relocate already proved node 2 can run from
+>   the replica. To force a real-crash test later: `echo b > /proc/sysrq-trigger`
+>   on node 1 (node 2 fences after ~1-2 min, relocates, fails back on return), or
+>   set `shutdown_policy=migrate` for a reboot that migrates instead of freezing.
+
 ## The problem this solves
 CT101's bulk data lives in **bind mounts on node-1's `tank`** (`mp0 /tank/immich`,
 `mp1 /tank/media`, `mp2 /tank/nextcloud`). Bind mounts are NOT replicated by

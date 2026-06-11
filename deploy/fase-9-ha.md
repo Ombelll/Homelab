@@ -8,6 +8,14 @@ node** from a recent replica. Prerequisites already in place: 2-node cluster
 useful. Until it's done, the **interim failover path is PBS**: if node 1 dies,
 restore CT 100/101 from the `pbs` storage onto node 2 and start them there.
 
+> ## ✅ DONE 2026-06-11 — A through E all executed & validated.
+> Parts B–E were carried out per **[fase-9b-full-ha-design.md](fase-9b-full-ha-design.md)**
+> (which also converts CT101's bind mounts to replicated managed volumes — the
+> piece this doc's Part B glossed over). Net result: CT100+CT101 on `zfs-guests`,
+> replicating to Proxmox-02 every 15 min, HA group `pref-node1`, failover proven
+> (graceful reboot freezes by design; manual relocate starts the guest on node 2
+> from its replica in ~20s). See 9b for the full results + the `unused0` gotcha.
+
 > **What HA gives on LXC:** restart-failover, not live migration. On a node
 > failure the guest is **restarted** on the other node from its last replicated
 > snapshot → expect a brief outage + up to *replication-interval* of data loss
