@@ -4,6 +4,17 @@ import { config } from "./config.js";
 
 const execFileAsync = promisify(execFile);
 
+export type RouterRadio = {
+  ifname: string; // ra0 / rax0 / ra1
+  band: string; // "2.4 GHz" | "5 GHz"
+  ssid: string;
+  channel?: number;
+  width?: string; // HT mode, e.g. HE160
+  txPowerDbm?: number;
+  maxRateMbps?: number;
+  clientCount: number;
+};
+
 export type RouterStats = {
   host: string; // IP/hostname (user@ stripped) — the device key
   name: string; // model string, e.g. "GL.iNet GL-MT3000"
@@ -19,6 +30,7 @@ export type RouterStats = {
   wanTxBps?: number;
   clientCount?: number;
   leaseCount?: number;
+  radios?: RouterRadio[];
 };
 
 // One-shot readout run on the router. Pure /proc + sysfs + uci/ip — no JSON
@@ -41,6 +53,20 @@ const REMOTE = [
   'echo "wan_tx=$(cat /sys/class/net/$WANDEV/statistics/tx_bytes 2>/dev/null)"',
   'echo "clients=$(awk \'NR>1 && $3=="0x2"\' /proc/net/arp 2>/dev/null | wc -l)"',
   'echo "leases=$(wc -l < /tmp/dhcp.leases 2>/dev/null)"',
+  // Per-radio wifi: discover interfaces from `iwinfo` (driver-agnostic — the
+  // MTK driver doesn't populate /sys .../wireless), keep only AP (Master) VIFs,
+  // emit one pipe-delimited RADIO line each. Band is derived from frequency.
+  'for r in $(iwinfo 2>/dev/null | sed -n "s/^\\([a-zA-Z0-9._-]*\\)[[:space:]]*ESSID:.*/\\1/p"); do ' +
+    'info=$(iwinfo "$r" info 2>/dev/null); echo "$info" | grep -q "Mode: Master" || continue; ' +
+    'ssid=$(echo "$info" | sed -n \'s/.*ESSID: "\\(.*\\)".*/\\1/p\'); ' +
+    'ch=$(echo "$info" | sed -n \'s/.*Channel: \\([0-9]*\\).*/\\1/p\'); ' +
+    'freq=$(echo "$info" | sed -n \'s/.*(\\([0-9.]*\\) GHz).*/\\1/p\'); ' +
+    'width=$(echo "$info" | sed -n \'s/.*HT Mode: *\\([^ ]*\\).*/\\1/p\'); ' +
+    'txp=$(echo "$info" | sed -n \'s/.*Tx-Power: \\([0-9]*\\).*/\\1/p\'); ' +
+    'rate=$(echo "$info" | sed -n \'s/.*Bit Rate: \\([0-9.]*\\).*/\\1/p\'); ' +
+    'clients=$(iwinfo "$r" assoclist 2>/dev/null | grep -cE "^[0-9A-Fa-f]{2}:"); ' +
+    'echo "RADIO|$r|$ssid|$ch|$freq|$width|$txp|$rate|$clients"; ' +
+  'done',
 ].join("; ");
 
 // Previous WAN octet counters, to turn the byte totals into a bytes/sec rate
@@ -133,6 +159,27 @@ export async function getRouterStats(): Promise<RouterStats | null> {
 
   stats.clientCount = num(kv.get("clients"));
   stats.leaseCount = num(kv.get("leases"));
+
+  // Per-radio wifi lines: RADIO|ifname|ssid|channel|freqGHz|width|txp|rate|clients
+  const radios: RouterRadio[] = [];
+  for (const line of stdout.split("\n")) {
+    if (!line.startsWith("RADIO|")) continue;
+    const p = line.split("|");
+    if (p.length < 9) continue;
+    const [, ifname, ssid, ch, freq, width, txp, rate, clients] = p;
+    const freqGHz = num(freq);
+    radios.push({
+      ifname,
+      band: freqGHz != null && freqGHz >= 5 ? "5 GHz" : "2.4 GHz",
+      ssid: ssid || ifname,
+      channel: num(ch),
+      width: width || undefined,
+      txPowerDbm: num(txp),
+      maxRateMbps: num(rate),
+      clientCount: num(clients) ?? 0,
+    });
+  }
+  if (radios.length) stats.radios = radios;
 
   return stats;
 }

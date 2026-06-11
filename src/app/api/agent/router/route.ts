@@ -67,6 +67,28 @@ export async function POST(request: Request) {
     data: { deviceId: device.id, rxBps: d.wanRxBps ?? 0, txBps: d.wanTxBps ?? 0 },
   });
 
+  // Wifi radios: upsert each reported one, then drop any that vanished.
+  const radios = d.radios ?? [];
+  for (const r of radios) {
+    const fields = {
+      band: r.band,
+      ssid: r.ssid,
+      channel: r.channel ?? null,
+      width: r.width ?? null,
+      txPowerDbm: r.txPowerDbm ?? null,
+      maxRateMbps: r.maxRateMbps ?? null,
+      clientCount: r.clientCount,
+    };
+    await prisma.networkRadio.upsert({
+      where: { deviceId_ifname: { deviceId: device.id, ifname: r.ifname } },
+      update: fields,
+      create: { deviceId: device.id, ifname: r.ifname, ...fields },
+    });
+  }
+  await prisma.networkRadio.deleteMany({
+    where: { deviceId: device.id, ifname: { notIn: radios.map((r) => r.ifname) } },
+  });
+
   await reconcileAlert(
     "router-temp-high",
     d.host,

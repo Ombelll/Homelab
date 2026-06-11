@@ -11,6 +11,7 @@ async function getDevices() {
     include: {
       ports: { orderBy: { ifIndex: "asc" } },
       samples: { orderBy: { at: "desc" }, take: 60 },
+      radios: { orderBy: { band: "asc" } },
     },
   });
 }
@@ -142,6 +143,34 @@ AGENT_ROUTER_SSH=root@192.168.1.1  # OpenWrt/GL.iNet router (key-only SSH)`}
                       }
                     />
                   </dl>
+                  {dev.radios.length > 0 ? (
+                    <table className="w-full border-t border-border text-sm">
+                      <thead className="bg-muted/20 text-xs uppercase tracking-wide text-muted-foreground">
+                        <tr>
+                          <th className="px-4 py-2 text-left font-medium">Wifi</th>
+                          <th className="px-4 py-2 text-left font-medium">SSID</th>
+                          <th className="px-4 py-2 text-right font-medium">Channel</th>
+                          <th className="px-4 py-2 text-right font-medium">Width</th>
+                          <th className="px-4 py-2 text-right font-medium">Max rate</th>
+                          <th className="px-4 py-2 text-right font-medium">Clients</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {dev.radios.map((r) => (
+                          <tr key={r.id} className="hover:bg-muted/20">
+                            <td className="px-4 py-2 font-medium">{r.band}</td>
+                            <td className="px-4 py-2 font-mono text-xs">{r.ssid}</td>
+                            <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">{r.channel ?? "—"}</td>
+                            <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">{r.width ?? "—"}</td>
+                            <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                              {r.maxRateMbps != null ? `${Math.round(r.maxRateMbps)} Mb` : "—"}
+                            </td>
+                            <td className="px-4 py-2 text-right tabular-nums">{r.clientCount}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : null}
                 </div>
               );
             }

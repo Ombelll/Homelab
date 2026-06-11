@@ -230,6 +230,17 @@ export const snmpReportSchema = z.object({
   ports: z.array(snmpPortSchema).max(256),
 });
 
+export const routerRadioSchema = z.object({
+  ifname: z.string().min(1).max(32),
+  band: z.string().min(1).max(16),
+  ssid: z.string().max(64),
+  channel: z.number().int().min(0).max(400).optional(),
+  width: z.string().max(32).optional(),
+  txPowerDbm: z.number().int().min(0).max(60).optional(),
+  maxRateMbps: z.number().min(0).max(100000).optional(),
+  clientCount: z.number().int().min(0),
+});
+
 // SSH report from an agent that polled an OpenWrt/GL.iNet router.
 export const routerReportSchema = z.object({
   host: z.string().min(1).max(255),
@@ -246,4 +257,5 @@ export const routerReportSchema = z.object({
   wanTxBps: z.number().min(0).optional(),
   clientCount: z.number().int().min(0).optional(),
   leaseCount: z.number().int().min(0).optional(),
+  radios: z.array(routerRadioSchema).max(16).optional(),
 });

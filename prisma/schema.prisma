@@ -634,6 +634,29 @@ model NetworkDevice {
 
   ports   NetworkPort[]
   samples NetworkDeviceSample[]
+  radios  NetworkRadio[]
+}
+
+// One wifi radio/SSID of a router (kind="router"), parsed from `iwinfo`. The
+// agent reports the AP VIFs (Mode: Master); client/repeater VIFs are skipped.
+// Rows for radios that vanish from a poll are deleted (diffed in the ingest).
+model NetworkRadio {
+  id          String   @id @default(cuid())
+  deviceId    String
+  ifname      String // ra0 / rax0 / ra1
+  band        String // "2.4 GHz" | "5 GHz" (derived from frequency)
+  ssid        String
+  channel     Int?
+  width       String? // HT mode, e.g. HT20 / VHT80 / HE160
+  txPowerDbm  Int?
+  maxRateMbps Float? // negotiated PHY max (iwinfo "Bit Rate")
+  clientCount Int // associated stations (assoclist)
+  updatedAt   DateTime @updatedAt
+
+  device NetworkDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, ifname])
+  @@index([deviceId])
 }
 
 // Shipped warn/error log lines from the host journal + container logs, for

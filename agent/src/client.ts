@@ -134,6 +134,16 @@ export const api = {
     wanTxBps?: number;
     clientCount?: number;
     leaseCount?: number;
+    radios?: Array<{
+      ifname: string;
+      band: string;
+      ssid: string;
+      channel?: number;
+      width?: string;
+      txPowerDbm?: number;
+      maxRateMbps?: number;
+      clientCount: number;
+    }>;
   }) => post("/api/agent/router", payload),
 
   // Shipped warn/error log lines (host journal + container logs).
