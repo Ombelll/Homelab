@@ -348,6 +348,12 @@ model Container {
   // True if the last run was OOM-killed (hit its memory limit). Drives an alert.
   oomKilled        Boolean?
 
+  // Self-heal bookkeeping. When DASHBOARD_AUTOHEAL is on, an "unhealthy"
+  // container gets a restart enqueued; lastHealAt enforces a cooldown and
+  // healCount caps attempts (reset to 0 once it's observed healthy again).
+  lastHealAt DateTime?
+  healCount  Int       @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

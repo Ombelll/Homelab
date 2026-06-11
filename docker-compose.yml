@@ -28,6 +28,9 @@ services:
       # retention, sweep, health-checks, image-update checks) that the host
       # cron drives. If unset the endpoints stay open (LAN-reachable), so set it.
       SWEEP_KEY: "${SWEEP_KEY:-}"
+      # Self-heal: "1" = auto-restart an unhealthy container (cooldown + attempt
+      # cap; alerts on each action and on giving up). Empty = monitor-only. Opt-in.
+      DASHBOARD_AUTOHEAL: "${DASHBOARD_AUTOHEAL:-}"
       # Quiet hours (only critical alerts pushed in the window), the public
       # status-page token (/status/<token>; empty = disabled), and the €/kWh
       # used for the power-cost estimate. All optional.

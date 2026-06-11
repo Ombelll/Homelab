@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { unauthorized, verifyAgentKey } from "@/lib/auth";
 import { reportSchema } from "@/lib/validation";
 import { evaluateMetricAlerts, evaluateStateAlerts } from "@/lib/alerts";
+import { autoHealContainers } from "@/lib/autoheal";
 import { notifyAlert } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
@@ -279,6 +280,9 @@ export async function POST(request: Request) {
   // State alerts read the rows we just wrote (ZFS health, sensors, failed
   // units), so they run after the transaction commits.
   await evaluateStateAlerts({ serverId, serverName: server.name });
+
+  // Self-heal: restart unhealthy containers (opt-in via DASHBOARD_AUTOHEAL).
+  await autoHealContainers({ serverId, serverName: server.name });
 
   // Backup-size anomaly: a newest backup that's suddenly far smaller than the
   // last one we saw is a classic sign of a truncated / half-failed dump. We
