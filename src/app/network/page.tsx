@@ -44,6 +44,18 @@ function formatUptime(sec: number | null | undefined): string {
   return `${m}m`;
 }
 
+// One cell in a router's stat grid.
+function Stat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+  return (
+    <div className="bg-card px-4 py-2.5">
+      <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className={`mt-0.5 text-sm tabular-nums ${warn ? "font-medium text-warning" : "text-foreground"}`}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
 export default async function NetworkPage() {
   const devices = await getDevices();
 
@@ -51,28 +63,90 @@ export default async function NetworkPage() {
     <>
       <PageHeader
         title="Network"
-        description="Managed switches and other devices polled over SNMP by an agent."
+        description="Managed switches polled over SNMP and routers polled over SSH by an agent."
       />
 
       {devices.length === 0 ? (
         <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground">
-          <p className="mb-2 font-medium text-foreground">No SNMP devices yet.</p>
+          <p className="mb-2 font-medium text-foreground">No network devices yet.</p>
           <p className="mb-3">
-            SNMP polling is dormant until you point an agent at a device. On a host whose agent
-            should poll the switch, set these in <code>/etc/homelab-agent.env</code> and restart
-            the agent:
+            Polling is dormant until you point an agent at a device. On a host whose agent should
+            poll, set one of these in <code>/etc/homelab-agent.env</code> and restart the agent:
           </p>
           <pre className="overflow-x-auto rounded-md border border-border bg-background/60 p-3 text-xs">
-{`AGENT_SNMP_TARGET=192.168.1.x      # switch IP
-AGENT_SNMP_COMMUNITY=homelab       # SNMP v2c community`}
+{`AGENT_SNMP_TARGET=192.168.1.x      # managed switch IP (SNMP v2c)
+AGENT_SNMP_COMMUNITY=homelab       # its SNMP community
+AGENT_ROUTER_SSH=root@192.168.1.1  # OpenWrt/GL.iNet router (key-only SSH)`}
           </pre>
           <p className="mt-3">
-            Enable SNMP (v2c) with that community in the switch&apos;s web UI first.
+            For a switch, enable SNMP (v2c) in its web UI first. For a router, the polling host&apos;s
+            SSH key must already be authorised on it.
           </p>
         </div>
       ) : (
         <div className="space-y-4">
           {devices.map((dev) => {
+            // --- routers: host-style stats, no port table ---------------
+            if (dev.kind === "router") {
+              const series = dev.samples.slice().reverse().map((s) => s.rxBps + s.txBps);
+              const sMax = Math.max(1, ...series);
+              const spark = series.map((v) => (v / sMax) * 100);
+              const last = dev.samples[0];
+              const memPct =
+                dev.memTotalMb && dev.memUsedMb != null
+                  ? Math.round((dev.memUsedMb / dev.memTotalMb) * 100)
+                  : null;
+              const hot = dev.cpuTempC != null && dev.cpuTempC >= 90;
+              return (
+                <div key={dev.id} className="overflow-hidden rounded-xl border border-border bg-card">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/30 px-4 py-2.5 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-primary">router</span>
+                      <span className="font-semibold">{dev.name}</span>
+                      <span className="font-mono text-xs text-muted-foreground">{dev.host}</span>
+                      {dev.firmware ? (
+                        <span className="truncate text-xs text-muted-foreground">· {dev.firmware}</span>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                      {dev.wanUp == null ? null : (
+                        <span className={dev.wanUp ? "text-success" : "text-destructive"}>
+                          WAN {dev.wanUp ? "up" : "down"}
+                          {dev.wanIp ? <span className="ml-1 font-mono text-muted-foreground">{dev.wanIp}</span> : null}
+                        </span>
+                      )}
+                      <span className="tabular-nums">↓ {formatBps(last?.rxBps)} · ↑ {formatBps(last?.txBps)}</span>
+                      {spark.length >= 2 ? <Sparkline values={spark} width={90} height={20} tone="primary" /> : null}
+                      <span>uptime {formatUptime(dev.uptimeSec)}</span>
+                      <span>seen {formatRelativeTime(dev.lastSeenAt)}</span>
+                    </div>
+                  </div>
+                  <dl className="grid grid-cols-2 gap-px bg-border sm:grid-cols-4">
+                    <Stat label="CPU temp" value={dev.cpuTempC != null ? `${dev.cpuTempC}°C` : "—"} warn={hot} />
+                    <Stat label="Load (1m)" value={dev.load1 != null ? dev.load1.toFixed(2) : "—"} />
+                    <Stat
+                      label="Memory"
+                      value={
+                        dev.memTotalMb
+                          ? `${dev.memUsedMb ?? "?"} / ${dev.memTotalMb} MiB${memPct != null ? ` (${memPct}%)` : ""}`
+                          : "—"
+                      }
+                      warn={memPct != null && memPct >= 90}
+                    />
+                    <Stat
+                      label="Clients"
+                      value={
+                        dev.clientCount != null
+                          ? `${dev.clientCount}${dev.leaseCount != null ? ` · ${dev.leaseCount} leases` : ""}`
+                          : "—"
+                      }
+                    />
+                  </dl>
+                </div>
+              );
+            }
+
+            // --- switches: the original per-port table ------------------
             const up = dev.ports.filter((p) => p.status === "up").length;
             const totalRx = dev.ports.reduce((a, p) => a + (p.rxBps ?? 0), 0);
             const totalTx = dev.ports.reduce((a, p) => a + (p.txBps ?? 0), 0);

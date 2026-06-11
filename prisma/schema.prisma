@@ -615,6 +615,23 @@ model NetworkDevice {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
+  // What kind of device this row is. "switch" = SNMP-polled managed switch with
+  // a NetworkPort[] table (the original use). "router" = an SSH-polled OpenWrt
+  // router (GL.iNet) reporting the host-style stats below instead of ports.
+  kind String @default("switch")
+
+  // --- router-only stats (null for switches) -----------------------------
+  // The host agent SSHes into the router and reads these from /proc + sysfs.
+  firmware    String? // GL.iNet version / OpenWrt release
+  cpuTempC    Float? // CPU/SoC temperature, °C
+  load1       Float? // 1-minute load average
+  memTotalMb  Int? // total RAM, MiB
+  memUsedMb   Int? // used RAM, MiB (total - available)
+  wanUp       Boolean? // WAN interface operstate == up
+  wanIp       String? // WAN IPv4 (CIDR), informational
+  clientCount Int? // reachable LAN neighbours (ARP) — rough device count
+  leaseCount  Int? // active DHCP leases
+
   ports   NetworkPort[]
   samples NetworkDeviceSample[]
 }

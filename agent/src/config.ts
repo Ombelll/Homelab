@@ -51,4 +51,11 @@ export const config = {
   // tick and reports its interfaces to /api/agent/snmp.
   snmpTarget: process.env.AGENT_SNMP_TARGET?.trim() || undefined,
   snmpCommunity: process.env.AGENT_SNMP_COMMUNITY?.trim() || "public",
+
+  // Optional SSH polling of an OpenWrt/GL.iNet router. DORMANT unless
+  // AGENT_ROUTER_SSH is set (e.g. "root@192.168.1.1") — then this agent SSHes
+  // in each tick, reads /proc + sysfs, and reports to /api/agent/router. Uses
+  // the host's existing SSH key (key-only, BatchMode) — no password is stored.
+  // Set this only on the ONE host whose key the router trusts (here: node 1).
+  routerSshTarget: process.env.AGENT_ROUTER_SSH?.trim() || undefined,
 };

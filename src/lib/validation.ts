@@ -229,3 +229,21 @@ export const snmpReportSchema = z.object({
   uptimeSec: z.number().int().min(0).optional(),
   ports: z.array(snmpPortSchema).max(256),
 });
+
+// SSH report from an agent that polled an OpenWrt/GL.iNet router.
+export const routerReportSchema = z.object({
+  host: z.string().min(1).max(255),
+  name: z.string().min(1).max(255),
+  firmware: z.string().max(255).optional(),
+  uptimeSec: z.number().int().min(0).optional(),
+  load1: z.number().min(0).max(10000).optional(),
+  cpuTempC: z.number().min(-50).max(200).optional(),
+  memTotalMb: z.number().int().min(0).optional(),
+  memUsedMb: z.number().int().min(0).optional(),
+  wanUp: z.boolean().optional(),
+  wanIp: z.string().max(64).optional(),
+  wanRxBps: z.number().min(0).optional(),
+  wanTxBps: z.number().min(0).optional(),
+  clientCount: z.number().int().min(0).optional(),
+  leaseCount: z.number().int().min(0).optional(),
+});

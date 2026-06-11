@@ -118,6 +118,24 @@ export const api = {
     }>;
   }) => post("/api/agent/snmp", payload),
 
+  // SSH poll of an OpenWrt/GL.iNet router (host-style stats, not ports).
+  reportRouter: (payload: {
+    host: string;
+    name: string;
+    firmware?: string;
+    uptimeSec?: number;
+    load1?: number;
+    cpuTempC?: number;
+    memTotalMb?: number;
+    memUsedMb?: number;
+    wanUp?: boolean;
+    wanIp?: string;
+    wanRxBps?: number;
+    wanTxBps?: number;
+    clientCount?: number;
+    leaseCount?: number;
+  }) => post("/api/agent/router", payload),
+
   // Shipped warn/error log lines (host journal + container logs).
   reportLogs: (payload: {
     hostname: string;

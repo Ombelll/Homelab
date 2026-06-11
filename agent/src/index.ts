@@ -25,6 +25,7 @@ import { getDiskIoRates } from "./diskio.js";
 import { getTopProcesses } from "./processes.js";
 import { getSmartDevices } from "./smart.js";
 import { getSnmpDevice } from "./snmp.js";
+import { getRouterStats } from "./router.js";
 import { getUps } from "./ups.js";
 import { getPowerWatts } from "./power.js";
 import { getLogs } from "./logs.js";
@@ -164,6 +165,14 @@ async function main() {
     setInterval(() => safeRun(snmpTick, "snmp"), config.intervalMs);
   }
 
+  // Optional: SSH-poll an OpenWrt/GL.iNet router on the metrics cadence.
+  // Dormant unless AGENT_ROUTER_SSH is set (only on the host whose key it trusts).
+  if (config.routerSshTarget) {
+    console.log(`[agent] router SSH polling enabled — target=${config.routerSshTarget}`);
+    await safeRun(routerTick, "router");
+    setInterval(() => safeRun(routerTick, "router"), config.intervalMs);
+  }
+
   // Ship warn/error logs (host journal + container logs) every 5 minutes for
   // after-the-fact searching in the dashboard.
   await safeRun(logsTick, "logs");
@@ -173,6 +182,11 @@ async function main() {
 async function snmpTick() {
   const device = await getSnmpDevice();
   if (device) await api.reportSnmp(device);
+}
+
+async function routerTick() {
+  const stats = await getRouterStats();
+  if (stats) await api.reportRouter(stats);
 }
 
 async function logsTick() {
