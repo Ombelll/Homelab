@@ -55,6 +55,22 @@ pvecm status        # "Qdevice" under Membership, Expected votes: 3
 After this, one node can fail and the survivor (1 node + QDevice = 2/3) stays
 **quorate** → HA can fail guests over.
 
+> **DONE 2026-06-11 — but NOT on the GL-MT3000.** The prebuilt OpenWrt qnetd
+> .ipk failed at runtime on the MT3000 with `libnspr4.so: gettid: symbol not
+> found` — the packages are built against a newer **musl** than the router's
+> firmware ships. (Building against the MT3000's exact SDK would fix it but
+> needs the build toolchain.) Instead the QDevice runs in a tiny **Debian LXC
+> `qdevice` (CT 111) on Proxmox-02, 192.168.1.30** — `apt install corosync-qnetd`
+> (glibc, no musl issue), then `pvecm qdevice setup 192.168.1.30 --force` from
+> node 1 (passwordless via node-1's root key pushed to the CT). Verified:
+> `pvecm status` → Expected votes 3, Total 3, Flags **Quorate Qdevice**.
+>
+> ⚠️ **Caveat:** the QDevice shares Proxmox-02's fate. It protects the important
+> direction (node-1 failure → failover to node-2, where all services live) but
+> NOT a node-2 failure (then node-1 loses the qdevice too). For symmetric
+> resilience move qnetd to an independent box (Pi) later — see the musl note;
+> a Pi avoids the whole problem.
+
 ---
 
 ## B. Matching ZFS storage for the guests (the crux)
