@@ -16,7 +16,10 @@ async function getDevices() {
       ports: { orderBy: { ifIndex: "asc" } },
       samples: { orderBy: { at: "desc" }, take: 60 },
       radios: { orderBy: { band: "asc" } },
-      clients: { orderBy: [{ online: "desc" }, { hostname: "asc" }, { mac: "asc" }] },
+      clients: {
+        orderBy: [{ online: "desc" }, { hostname: "asc" }, { mac: "asc" }],
+        include: { samples: { orderBy: { at: "desc" }, take: 30 } },
+      },
     },
   });
 }
@@ -226,6 +229,12 @@ AGENT_ROUTER_SSH=root@192.168.1.1  # OpenWrt/GL.iNet router (key-only SSH)`}
                           {dev.clients.map((c) => {
                             const isNew = Date.now() - new Date(c.firstSeen).getTime() < 86_400_000;
                             const weak = c.signalDbm != null && c.signalDbm <= -75;
+                            // Signal trend (oldest→newest): map dBm (-90 weak … -30 great) to 0–100.
+                            const sig = c.samples
+                              .filter((s) => s.signalDbm != null)
+                              .slice()
+                              .reverse()
+                              .map((s) => Math.max(0, Math.min(100, ((s.signalDbm! + 90) / 60) * 100)));
                             return (
                               <tr key={c.id} className={c.online ? "hover:bg-muted/20" : "text-muted-foreground hover:bg-muted/20"}>
                                 <td className="px-4 py-2">
@@ -236,7 +245,10 @@ AGENT_ROUTER_SSH=root@192.168.1.1  # OpenWrt/GL.iNet router (key-only SSH)`}
                                 <td className="px-4 py-2 font-mono text-xs">{c.ip ?? "—"}</td>
                                 <td className="px-4 py-2 text-xs">{c.band ? `wifi ${c.band}` : "—"}</td>
                                 <td className={`px-4 py-2 text-right tabular-nums ${weak ? "text-warning" : "text-muted-foreground"}`}>
-                                  {c.signalDbm != null ? `${c.signalDbm} dBm` : "—"}
+                                  <span className="inline-flex items-center justify-end gap-1.5">
+                                    {sig.length >= 2 ? <Sparkline values={sig} width={48} height={14} tone={weak ? "warning" : "primary"} /> : null}
+                                    {c.signalDbm != null ? `${c.signalDbm} dBm` : "—"}
+                                  </span>
                                 </td>
                                 <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
                                   {c.rxRateMbps != null ? `${Math.round(c.rxRateMbps)}/${Math.round(c.txRateMbps ?? 0)}` : "—"}

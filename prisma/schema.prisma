@@ -662,10 +662,27 @@ model NetworkClient {
   firstSeen  DateTime @default(now())
   lastSeen   DateTime @default(now())
 
-  device NetworkDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  device  NetworkDevice         @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  samples NetworkClientSample[]
 
   @@unique([deviceId, mac])
   @@index([deviceId])
+}
+
+// Time-series of a wifi client's signal + negotiated rates, for the per-device
+// trend sparkline. One row per router poll while the client is associated on
+// wifi. Pruned by retention.
+model NetworkClientSample {
+  id         String   @id @default(cuid())
+  clientId   String
+  signalDbm  Int?
+  rxRateMbps Float?
+  txRateMbps Float?
+  at         DateTime @default(now())
+
+  client NetworkClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, at])
 }
 
 // One wifi radio/SSID of a router (kind="router"), parsed from `iwinfo`. The

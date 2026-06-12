@@ -104,11 +104,23 @@ export async function POST(request: Request) {
       txRateMbps: c.txRateMbps ?? null,
       lastSeen: now,
     };
-    await prisma.networkClient.upsert({
+    const row = await prisma.networkClient.upsert({
       where: { deviceId_mac: { deviceId: device.id, mac: c.mac } },
       update: fields,
       create: { deviceId: device.id, mac: c.mac, firstSeen: now, ...fields },
     });
+    // Wifi clients: record a signal/rate history point for the trend sparkline.
+    if (c.band && (c.signalDbm != null || c.rxRateMbps != null)) {
+      await prisma.networkClientSample.create({
+        data: {
+          clientId: row.id,
+          signalDbm: c.signalDbm ?? null,
+          rxRateMbps: c.rxRateMbps ?? null,
+          txRateMbps: c.txRateMbps ?? null,
+          at: now,
+        },
+      });
+    }
   }
   if (clients.length) {
     await prisma.networkClient.updateMany({

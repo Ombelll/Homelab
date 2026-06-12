@@ -43,12 +43,13 @@ export async function POST(request: Request) {
   // keep them longer than the raw-metric window (at least 90 days).
   const capacityCutoff = new Date(now.getTime() - Math.max(days, 90) * 24 * 60 * 60 * 1000);
 
-  const [metrics, checkResults, upsSamples, netSamples, logs, capacitySamples, alerts, jobs, sessions, invites, audit] =
+  const [metrics, checkResults, upsSamples, netSamples, clientSamples, logs, capacitySamples, alerts, jobs, sessions, invites, audit] =
     await prisma.$transaction([
     prisma.metric.deleteMany({ where: { createdAt: { lt: cutoff } } }),
     prisma.healthCheckResult.deleteMany({ where: { at: { lt: cutoff } } }),
     prisma.upsSample.deleteMany({ where: { at: { lt: cutoff } } }),
     prisma.networkDeviceSample.deleteMany({ where: { at: { lt: cutoff } } }),
+    prisma.networkClientSample.deleteMany({ where: { at: { lt: cutoff } } }),
     prisma.logEntry.deleteMany({ where: { at: { lt: cutoff } } }),
     prisma.containerSample.deleteMany({ where: { at: { lt: cutoff } } }),
     prisma.capacitySample.deleteMany({ where: { hourStart: { lt: capacityCutoff } } }),
@@ -82,6 +83,7 @@ export async function POST(request: Request) {
       checkResults: checkResults.count,
       upsSamples: upsSamples.count,
       netSamples: netSamples.count,
+      clientSamples: clientSamples.count,
       logs: logs.count,
       capacitySamples: capacitySamples.count,
       alerts: alerts.count,
