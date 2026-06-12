@@ -63,10 +63,11 @@ for slug in FORWARD_APPS:
         name="fwd-%s" % slug,
         defaults=dict(authorization_flow=auth_flow, invalidation_flow=inval_flow,
                       mode=ProxyMode.FORWARD_SINGLE,
-                      # https: a TLS-terminating nginx front (deploy/https-proxy)
-                      # serves *.lan on :443, so the forward-auth redirect_uri +
-                      # cookie must be https or the browser bounces back to http.
-                      external_host="https://%s.lan" % slug),
+                      # http: must match the scheme the embedded outpost sees on
+                      # the forward-auth subrequest (Traefik web entrypoint = :80).
+                      # https here breaks the callback (HTTP 400) — the outpost
+                      # derives the scheme from X-Forwarded-Proto (http), not this.
+                      external_host="http://%s.lan" % slug),
     )
     # The ORM doesn't auto-populate the allowed redirect_uri the way the UI/API
     # serializer does, so authentik rejects the callback ("Redirect URI Error").
@@ -77,7 +78,7 @@ for slug in FORWARD_APPS:
     except Exception:
         p.redirect_uris = [RedirectURI(
             RedirectURIMatchingMode.STRICT,
-            "https://%s.lan/outpost.goauthentik.io/callback" % slug)]
+            "http://%s.lan/outpost.goauthentik.io/callback" % slug)]
     p.save()
     Application.objects.update_or_create(
         slug="fwd-%s" % slug, defaults=dict(name="%s (SSO)" % slug, provider=p))
@@ -90,7 +91,7 @@ cfg = dict(outpost._config)
 # container would fail TLS verify against our private CA over https). Only the
 # BROWSER-facing host (the login redirect Location) must be https.
 cfg["authentik_host"] = "http://auth.lan/"
-cfg["authentik_host_browser"] = "https://auth.lan/"
+cfg["authentik_host_browser"] = "http://auth.lan/"
 outpost._config = cfg
 outpost.save()
 Application.objects.filter(slug="homelab-forward-auth").delete()
