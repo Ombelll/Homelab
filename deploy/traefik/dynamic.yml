@@ -68,3 +68,14 @@ http:
     #   entrypoints: [web]
     #   service: api@internal
     #   middlewares: [traefik-auth]
+
+# LAN HTTPS default certificate. The websecure entrypoint (traefik.yml) serves
+# this local-CA cert for every *.lan host. Files are mounted at /certs in the
+# compose file; regenerate with deploy/https-proxy/gen-certs.sh (explicit SANs
+# per host, since schannel/curl reject a bare *.lan wildcard).
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /certs/lan.crt
+        keyFile: /certs/lan.key

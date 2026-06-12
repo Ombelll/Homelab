@@ -1,10 +1,16 @@
 # Traefik v3 static configuration.
 #
-# In the default homelab setup Traefik terminates plain HTTP on :80 and
-# Tailscale Serve sits in front of it to provide valid HTTPS for the tailnet
-# (see fase-4-traefik-https.md, Deel C). That means Traefik itself only needs
-# the `web` entrypoint. The Let's Encrypt path (own domain) adds `websecure`
-# and a certresolver — those blocks are commented out below.
+# Two TLS paths exist in this repo:
+#  * Tailnet: Tailscale Serve fronts plain :80 and provides HTTPS for the tailnet.
+#  * LAN (active): Traefik itself terminates TLS on `websecure` (:443) with a
+#    local-CA wildcard/SAN cert (see deploy/https-proxy/gen-certs.sh), so every
+#    *.lan host is valid HTTPS on the LAN. The cert is mounted at /certs and the
+#    default store is set in dynamic.yml. Traefik publishes 443 on the LAN IP
+#    192.168.1.21 only (the tailnet IP's :443 belongs to tailscaled).
+#
+# NB: Docker Engine 29 dropped API < 1.40; Traefik's docker client pins 1.24, so
+# the daemon needs `DOCKER_MIN_API_VERSION=1.24` (systemd drop-in on the host) —
+# see the compose file's note. Without it the docker provider loads no routers.
 
 global:
   checkNewVersion: false
@@ -13,17 +19,21 @@ global:
 entryPoints:
   web:
     address: ":80"
+  # LAN HTTPS: Traefik terminates TLS here with the default cert from dynamic.yml
+  # (tls.stores.default). Published on 192.168.1.21:443 in the compose file.
+  websecure:
+    address: ":443"
+    http:
+      tls: {}
   # Internal-only entrypoint for the /ping healthcheck (see `ping` below). Not
   # published in compose, so it's only reachable inside the container for the
   # `traefik healthcheck` probe.
   ping:
     address: ":8082"
-  # --- Let's Encrypt path only: terminate TLS at Traefik instead of Tailscale.
-  # websecure:
-  #   address: ":443"
-  #   http:
-  #     tls:
-  #       certResolver: le
+  # --- Let's Encrypt path only: swap the websecure tls above for a certResolver.
+  #     http:
+  #       tls:
+  #         certResolver: le
 
 # Liveness endpoint used by the compose healthcheck (`traefik healthcheck --ping`).
 ping:

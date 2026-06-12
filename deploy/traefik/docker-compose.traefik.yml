@@ -21,6 +21,10 @@ services:
     environment:
       # Read-only access to exactly what the Traefik docker provider reads.
       CONTAINERS: 1
+      # VERSION + PING let Traefik's docker client negotiate the API version via
+      # /version and /_ping. Required on Docker 29+ (the daemon dropped API 1.24).
+      VERSION: 1
+      PING: 1
       NETWORKS: 1
       # Everything else stays denied (the image defaults most to 0), and POST
       # is off so nothing can start/stop/mutate containers through this proxy.
@@ -32,20 +36,29 @@ services:
     # No published ports: only reachable by Traefik over the internal network.
 
   traefik:
-    image: traefik:v3.3
+    image: traefik:v3.5
     container_name: traefik
     restart: unless-stopped
+    environment:
+      # Docker Engine 29 dropped API < 1.40, but Traefik's docker client still
+      # pins 1.24 and ignores this var (kept for documentation). The working fix
+      # is DOCKER_MIN_API_VERSION=1.24 on the daemon (host systemd drop-in:
+      # /etc/systemd/system/docker.service.d/min-api.conf) so the daemon accepts
+      # Traefik's 1.24 requests. Without it the docker provider loads no routers.
+      DOCKER_API_VERSION: "1.44"
     depends_on:
       - socket-proxy
     ports:
       - "80:80"
-      # Uncomment only on the Let's Encrypt path (TLS terminates at Traefik).
-      # On the default Tailscale-Serve path, TLS terminates upstream — leave off.
-      # - "443:443"
+      # LAN HTTPS: Traefik terminates TLS on :443. Bound to the LAN IP only —
+      # the tailnet IP's :443 belongs to tailscaled (Tailscale Serve).
+      - "192.168.1.21:443:443"
     volumes:
       # No docker.sock here — Traefik talks to socket-proxy (see traefik.yml).
       - ./traefik.yml:/etc/traefik/traefik.yml:ro
       - ./dynamic.yml:/etc/traefik/dynamic.yml:ro
+      # Local-CA cert for *.lan, served as the websecure default certificate.
+      - ./certs:/certs:ro
       # - ./acme:/acme   # Let's Encrypt path: persist issued certs
     networks:
       - proxy
@@ -56,8 +69,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
-    # environment:
-    #   CF_DNS_API_TOKEN: "${CF_DNS_API_TOKEN}"   # Let's Encrypt DNS-01 path
+    # environment (Let's Encrypt DNS-01 path):
+    #   CF_DNS_API_TOKEN: "${CF_DNS_API_TOKEN}"
 
 networks:
   proxy:

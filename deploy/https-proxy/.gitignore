@@ -1,0 +1,6 @@
+# Never commit private keys or issued certs — they are generated per-host by
+# gen-certs.sh and the CA key must stay on the box only.
+certs/
+*.key
+*.crt
+*.srl
