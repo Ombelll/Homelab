@@ -36,7 +36,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.n8n.rule=Host(`${N8N_HOST}`)"
-      - "traefik.http.routers.n8n.entrypoints=web"
+      - "traefik.http.routers.n8n.entrypoints=web,websecure"
       - "traefik.http.routers.n8n.middlewares=security-headers@file"
       - "traefik.http.services.n8n.loadbalancer.server.port=5678"
 

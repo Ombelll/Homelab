@@ -56,7 +56,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.paperless.rule=Host(`paperless.lan`)"
-      - "traefik.http.routers.paperless.entrypoints=web"
+      - "traefik.http.routers.paperless.entrypoints=web,websecure"
       - "traefik.http.routers.paperless.middlewares=security-headers@file"
       - "traefik.http.services.paperless.loadbalancer.server.port=8000"
 

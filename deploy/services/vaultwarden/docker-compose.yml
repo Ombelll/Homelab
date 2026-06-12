@@ -32,7 +32,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.vaultwarden.rule=Host(`${VAULTWARDEN_HOST:?set in .env}`)"
-      - "traefik.http.routers.vaultwarden.entrypoints=web"
+      - "traefik.http.routers.vaultwarden.entrypoints=web,websecure"
       - "traefik.http.routers.vaultwarden.middlewares=security-headers@file"
       - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
 

@@ -22,7 +22,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.stirling.rule=Host(`pdf.lan`)"
-      - "traefik.http.routers.stirling.entrypoints=web"
+      - "traefik.http.routers.stirling.entrypoints=web,websecure"
       - "traefik.http.routers.stirling.middlewares=security-headers@file,authentik@file"
       - "traefik.http.services.stirling.loadbalancer.server.port=8080"
 

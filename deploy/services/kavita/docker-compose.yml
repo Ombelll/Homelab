@@ -25,7 +25,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.kavita.rule=Host(`books.lan`)"
-      - "traefik.http.routers.kavita.entrypoints=web"
+      - "traefik.http.routers.kavita.entrypoints=web,websecure"
       - "traefik.http.routers.kavita.middlewares=security-headers@file"
       - "traefik.http.services.kavita.loadbalancer.server.port=5000"
 

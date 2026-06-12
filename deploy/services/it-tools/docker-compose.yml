@@ -16,7 +16,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.ittools.rule=Host(`tools.lan`)"
-      - "traefik.http.routers.ittools.entrypoints=web"
+      - "traefik.http.routers.ittools.entrypoints=web,websecure"
       - "traefik.http.routers.ittools.middlewares=security-headers@file,authentik@file"
       - "traefik.http.services.ittools.loadbalancer.server.port=80"
 

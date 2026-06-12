@@ -44,7 +44,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.forgejo.rule=Host(`${FORGEJO_HOST}`)"
-      - "traefik.http.routers.forgejo.entrypoints=web"
+      - "traefik.http.routers.forgejo.entrypoints=web,websecure"
       - "traefik.http.routers.forgejo.middlewares=security-headers@file"
       - "traefik.http.services.forgejo.loadbalancer.server.port=3000"
 

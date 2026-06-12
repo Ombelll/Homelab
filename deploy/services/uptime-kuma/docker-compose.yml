@@ -21,7 +21,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.uptimekuma.rule=Host(`uptime.lan`)"
-      - "traefik.http.routers.uptimekuma.entrypoints=web"
+      - "traefik.http.routers.uptimekuma.entrypoints=web,websecure"
       - "traefik.http.routers.uptimekuma.middlewares=security-headers@file,authentik@file"
       # Uptime Kuma's web UI listens on :3001 inside the container.
       - "traefik.http.services.uptimekuma.loadbalancer.server.port=3001"

@@ -26,7 +26,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.navidrome.rule=Host(`music.lan`)"
-      - "traefik.http.routers.navidrome.entrypoints=web"
+      - "traefik.http.routers.navidrome.entrypoints=web,websecure"
       - "traefik.http.routers.navidrome.middlewares=security-headers@file"
       - "traefik.http.services.navidrome.loadbalancer.server.port=4533"
 

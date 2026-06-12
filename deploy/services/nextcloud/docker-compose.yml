@@ -44,7 +44,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.nextcloud.rule=Host(`nextcloud.lan`)"
-      - "traefik.http.routers.nextcloud.entrypoints=web"
+      - "traefik.http.routers.nextcloud.entrypoints=web,websecure"
       - "traefik.http.routers.nextcloud.middlewares=security-headers@file"
       - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
 

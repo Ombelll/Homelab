@@ -29,7 +29,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.adguard.rule=Host(`adguard.lan`)"
-      - "traefik.http.routers.adguard.entrypoints=web"
+      - "traefik.http.routers.adguard.entrypoints=web,websecure"
       - "traefik.http.routers.adguard.middlewares=security-headers@file"
       # AdGuard's admin UI listens on :3000 inside the container (set in the wizard).
       - "traefik.http.services.adguard.loadbalancer.server.port=3000"

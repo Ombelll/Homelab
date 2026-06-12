@@ -28,7 +28,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.speedtest.rule=Host(`speed.lan`)"
-      - "traefik.http.routers.speedtest.entrypoints=web"
+      - "traefik.http.routers.speedtest.entrypoints=web,websecure"
       - "traefik.http.routers.speedtest.middlewares=security-headers@file,authentik@file"
       - "traefik.http.services.speedtest.loadbalancer.server.port=80"
 

@@ -43,7 +43,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.immich.rule=Host(`immich.lan`)"
-      - "traefik.http.routers.immich.entrypoints=web"
+      - "traefik.http.routers.immich.entrypoints=web,websecure"
       - "traefik.http.routers.immich.middlewares=security-headers@file"
       - "traefik.http.services.immich.loadbalancer.server.port=2283"
 
