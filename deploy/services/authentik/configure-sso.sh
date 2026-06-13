@@ -124,8 +124,16 @@ for slug, name, secret_env, redirects in OIDC:
             client_id=slug, client_secret=secret, signing_key=signing,
         ),
     )
-    # redirect_uris is a property over the _redirect_uris JSON field.
-    prov.redirect_uris = [RedirectURI(RedirectURIMatchingMode.STRICT, u) for u in redirects]
+    # redirect_uris is a property over the _redirect_uris JSON field. Register BOTH
+    # http and https for every web callback — the apps are served over https on the
+    # LAN now (Traefik :443) but may still emit http depending on their base-URL
+    # config, so accept either. Non-http schemes (app.immich:///) pass through as-is.
+    uris = []
+    for u in redirects:
+        uris.append(u)
+        if u.startswith("http://"):
+            uris.append("https://" + u[len("http://"):])
+    prov.redirect_uris = [RedirectURI(RedirectURIMatchingMode.STRICT, u) for u in uris]
     prov.save()
     prov.property_mappings.set(scopes)
     Application.objects.update_or_create(
