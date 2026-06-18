@@ -44,6 +44,13 @@ services:
       # shows a "configure" hint instead of charts.
       SPEEDTEST_URL: "${SPEEDTEST_URL:-http://speedtest-tracker}"
       SPEEDTEST_API_TOKEN: "${SPEEDTEST_API_TOKEN:-}"
+      # Proxmox read-only cluster view (/proxmox). Empty PROXMOX_API_URL disables
+      # the page (it shows a setup hint). Token is a read-only PVEAuditor token;
+      # PROXMOX_TLS_INSECURE allows the node's self-signed cert (set "0" to enforce).
+      PROXMOX_API_URL: "${PROXMOX_API_URL:-}"
+      PROXMOX_TOKEN_ID: "${PROXMOX_TOKEN_ID:-}"
+      PROXMOX_TOKEN_SECRET: "${PROXMOX_TOKEN_SECRET:-}"
+      PROXMOX_TLS_INSECURE: "${PROXMOX_TLS_INSECURE:-1}"
       NODE_ENV: production
     volumes:
       # Legacy: held the old SQLite DB before the Postgres migration. Kept
