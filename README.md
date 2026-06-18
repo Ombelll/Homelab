@@ -212,6 +212,11 @@ Two internal endpoints, both gated by `SWEEP_KEY` (open if unset):
 # Digest (optional): a health summary to all notification channels. Daily 08:00.
 0 8 * * *  curl -fsS -X POST http://dashboard/api/internal/digest \
   -H "x-sweep-key: $SWEEP_KEY" > /dev/null
+
+# Proxmox (optional): poll the cluster read-only for the /proxmox page. No-op
+# until PROXMOX_API_URL / PROXMOX_TOKEN_ID / PROXMOX_TOKEN_SECRET are set.
+* * * * *  curl -fsS -X POST http://dashboard/api/internal/poll-proxmox \
+  -H "x-sweep-key: $SWEEP_KEY" > /dev/null
 ```
 
 The downsample job must run before the retention job for any given hour
