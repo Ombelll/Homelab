@@ -68,7 +68,7 @@ export default async function ProxmoxPage() {
           </p>
           <pre className="overflow-x-auto rounded-md border border-border bg-background/60 p-3 text-xs">
 {`PROXMOX_API_URL=https://192.168.1.10:8006
-PROXMOX_TOKEN_ID=monitor@pam!dashboard
+PROXMOX_TOKEN_ID=monitor@pve!dashboard
 PROXMOX_TOKEN_SECRET=<the token secret>
 
 # schedule (every minute), alongside the other internal routes:
