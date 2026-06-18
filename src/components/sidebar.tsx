@@ -26,6 +26,7 @@ const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/apps", label: "Apps", icon: LayoutGrid },
   { href: "/servers", label: "Servers", icon: Server },
+  { href: "/proxmox", label: "Proxmox", icon: Cpu },
   { href: "/containers", label: "Containers", icon: Boxes },
   { href: "/network", label: "Network", icon: Network },
   { href: "/wan", label: "WAN", icon: Gauge },

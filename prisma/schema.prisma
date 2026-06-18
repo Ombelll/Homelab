@@ -797,3 +797,54 @@ model NetworkPort {
   @@unique([deviceId, ifIndex])
   @@index([deviceId])
 }
+
+// A Proxmox VE node (hypervisor host), polled read-only from the cluster API
+// with a PVEAuditor token (see /api/internal/poll-proxmox + lib/proxmox.ts).
+// Current-state snapshot: upserted each poll keyed on the node name. Nodes that
+// drop out of the cluster status are marked status="offline" (kept for history,
+// never deleted — the cluster always lists all members).
+model ProxmoxNode {
+  id         String    @id @default(cuid())
+  node       String    @unique // Proxmox node name, e.g. "Proxmox-01"
+  status     String    @default("unknown") // "online" | "offline"
+  cpu        Float? // load fraction 0..1
+  maxCpu     Int? // assigned cores
+  memUsedMb  Int?
+  memTotalMb Int?
+  uptimeSec  Int?
+  level      String? // subscription level ("" = no subscription)
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  guests ProxmoxGuest[]
+}
+
+// A guest (QEMU VM or LXC container) seen via the cluster resources API. vmid is
+// unique across a cluster, so it's the upsert key; the node it runs on is
+// tracked in nodeName (updated on migration). Guests that vanish from a poll are
+// deleted (diffed in the poll route). Read-only — no lifecycle actions yet.
+model ProxmoxGuest {
+  id         String    @id @default(cuid())
+  vmid       Int       @unique
+  type       String // "qemu" | "lxc"
+  name       String
+  nodeName   String // node the guest currently runs on
+  status     String    @default("unknown") // "running" | "stopped" | "paused"
+  cpu        Float? // load fraction 0..1
+  maxCpu     Int? // assigned vCPUs / cores
+  memUsedMb  Int?
+  maxMemMb   Int?
+  diskUsedMb Int? // 0 for VMs that don't report guest-agent disk usage
+  maxDiskMb  Int?
+  uptimeSec  Int?
+  template   Boolean   @default(false)
+  tags       String? // Proxmox tag list (semicolon-separated), informational
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  node ProxmoxNode @relation(fields: [nodeName], references: [node], onDelete: Cascade)
+
+  @@index([nodeName])
+}
